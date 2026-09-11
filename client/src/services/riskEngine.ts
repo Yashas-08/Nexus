@@ -254,8 +254,14 @@ function evaluateEvidenceConfidence(
   const score = summary?.verificationScore ?? (evidenceList.length > 0 ? verifiedCount / evidenceList.length : 0);
   const unknownCount = summary?.unknownCount ?? evidenceList.filter((e) => e.status === 'UNKNOWN').length;
 
-  // If factors rely heavily on inferences or uncorroborated text
   const hasVerifiedSignal = matchedFactors.some((f) => f.sourceType === 'VERIFIED');
+  const hasExternalConflict = analysis.conflicts?.some((c) =>
+    c.description.toLowerCase().includes('meteorological') || c.description.toLowerCase().includes('external')
+  );
+
+  if (hasExternalConflict) {
+    return 'UNCERTAIN';
+  }
 
   if (hasVerifiedSignal && score >= 0.5 && verifiedCount >= 2) {
     return 'CONFIRMED';
@@ -353,6 +359,20 @@ export function assessRisk(analysis: Partial<NormalizedAnalysis> | null | undefi
     if (hasEscalation) score += 10;
   }
 
+  // External context telemetry integration (e.g. verified severe weather)
+  const severeWeatherContext = analysis.externalContext?.find(
+    (c) => c.source === 'WEATHER' && c.relevance === 'HIGH' && c.verificationStatus === 'VERIFIED'
+  );
+  if (severeWeatherContext) {
+    score += 10;
+    factors.push({
+      label: 'Verified Severe Weather Telemetry',
+      impact: 'HIGH',
+      sourceType: 'VERIFIED',
+      detail: severeWeatherContext.summary,
+    });
+  }
+
   // Deduplication check: Multiple user claims about the same issue must NOT add redundant base points.
   // (Notice collectDeduplicatedTexts already enforces single detection per signal ID).
 
@@ -427,6 +447,10 @@ export function assessRisk(analysis: Partial<NormalizedAnalysis> | null | undefi
 
   if (hasEscalation) {
     reasoning.push('Report indicates worsening or uncontained conditions.');
+  }
+
+  if (severeWeatherContext) {
+    reasoning.push(`Meteorological telemetry corroborates severe external conditions (${severeWeatherContext.title}).`);
   }
 
   // Explain evidence confidence relationship explicitly

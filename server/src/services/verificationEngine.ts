@@ -5,14 +5,19 @@ import type {
   EvidenceItem,
   EvidenceConflict,
   VerificationSummary,
+  ExternalContextItem,
 } from '../types/analysis.js';
 
 export class VerificationEngine {
   /**
    * Deterministically normalizes and classifies Gemini analysis results
-   * against the actual physical modalities present in the request.
+   * against the actual physical modalities and real-world external context.
    */
-  public normalize(raw: AnalysisResult, request: IntentAnalyzeRequest): NormalizedAnalysis {
+  public normalize(
+    raw: AnalysisResult,
+    request: IntentAnalyzeRequest,
+    externalContext: ExternalContextItem[] = []
+  ): NormalizedAnalysis {
     const hasImages = Boolean(request.images && request.images.length > 0);
     const hasDocuments = Boolean(request.documents && request.documents.length > 0);
     const hasLocation = Boolean(request.location !== null && request.location !== undefined);
@@ -213,7 +218,34 @@ export class VerificationEngine {
       }
     }
 
-    // 6. Compute Verification Summary Metrics
+    // 6. Cross-reference External Context with User Statements
+    for (const ctx of externalContext) {
+      if (ctx.source === 'WEATHER') {
+        const isClearOrNoRain = ctx.summary.toLowerCase().includes('precipitation: 0') || ctx.summary.toLowerCase().includes('clear sky');
+        
+        // Find user claims claiming rain or storm flooding
+        for (const userItem of evidenceItems.filter((e) => e.status === 'USER_REPORTED')) {
+          const lowerText = userItem.text.toLowerCase();
+          if (
+            (lowerText.includes('storm') ||
+              lowerText.includes('heavy rain') ||
+              lowerText.includes('rainfall') ||
+              lowerText.includes('downpour') ||
+              lowerText.includes('flood')) &&
+            isClearOrNoRain
+          ) {
+            conflicts.push({
+              description: `Meteorological telemetry conflict: User-reported storm flooding could not be independently confirmed by the available real-time meteorological context (${ctx.summary}).`,
+              competingClaims: [userItem.text, ctx.summary],
+              resolution:
+                'User claim retained as USER_REPORTED. Water inundation may originate from internal plumbing rupture or localized drainage rather than active rainfall.',
+            });
+          }
+        }
+      }
+    }
+
+    // 7. Compute Verification Summary Metrics
     const verifiedCount = evidenceItems.filter((e) => e.status === 'VERIFIED').length;
     const userReportedCount = evidenceItems.filter((e) => e.status === 'USER_REPORTED').length;
     const inferredCount = evidenceItems.filter((e) => e.status === 'INFERRED').length;
@@ -237,6 +269,7 @@ export class VerificationEngine {
       evidence: evidenceItems,
       conflicts,
       verificationSummary,
+      externalContext,
     };
   }
 }

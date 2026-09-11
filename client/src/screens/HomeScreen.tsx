@@ -5,8 +5,11 @@ import {
   ArrowRight,
   Camera,
   CheckCircle2,
+  CloudRain,
+  ExternalLink,
   FileCheck,
   FileText,
+  Globe,
   HelpCircle,
   Info,
   MapPin,
@@ -552,6 +555,68 @@ export function HomeScreen({
     }
   };
 
+  const getExternalSourceBadge = (source: string) => {
+    switch (source) {
+      case 'WEATHER':
+        return (
+          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-sky-50 text-sky-700 border border-sky-200 inline-flex items-center gap-1">
+            <CloudRain className="w-3 h-3 text-sky-600" />
+            Weather Telemetry
+          </span>
+        );
+      case 'MAP':
+        return (
+          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 inline-flex items-center gap-1">
+            <MapPin className="w-3 h-3 text-emerald-600" />
+            Civic Map
+          </span>
+        );
+      case 'WEB':
+        return (
+          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-200 inline-flex items-center gap-1">
+            <Globe className="w-3 h-3 text-purple-600" />
+            Public Web
+          </span>
+        );
+      default:
+        return (
+          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-stone-100 text-stone-700 border border-stone-200 inline-flex items-center gap-1">
+            <Globe className="w-3 h-3 text-stone-600" />
+            {source}
+          </span>
+        );
+    }
+  };
+
+  const getExternalVerificationBadge = (status: string) => {
+    switch (status) {
+      case 'VERIFIED':
+        return (
+          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+            Verified
+          </span>
+        );
+      case 'PARTIALLY_CORROBORATED':
+        return (
+          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">
+            Partially Corroborated
+          </span>
+        );
+      case 'CONFLICTING':
+        return (
+          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200">
+            Discrepancy
+          </span>
+        );
+      default:
+        return (
+          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-stone-100 text-stone-600 border border-stone-200">
+            Unverified
+          </span>
+        );
+    }
+  };
+
   // --- RENDER ANALYSIS PRESENTATION (AFTER SUCCESSFUL UNDERSTANDING) ---
   if (analysisResult) {
     const riskAssessment = assessRisk(analysisResult);
@@ -871,6 +936,62 @@ export function HomeScreen({
                 </div>
               </div>
             )}
+          </section>
+        )}
+
+        {/* Real-World Context & External Verification Card */}
+        {analysisResult.externalContext && analysisResult.externalContext.length > 0 && (
+          <section className="p-4 rounded-2xl bg-white border border-stone-200/90 shadow-xs space-y-3.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <Globe className="w-4 h-4 text-stone-800" />
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-stone-700">
+                  Real-World Context
+                </h2>
+              </div>
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-stone-100 text-stone-700 border border-stone-200">
+                {analysisResult.externalContext.length} Source{analysisResult.externalContext.length === 1 ? '' : 's'}
+              </span>
+            </div>
+
+            <p className="text-[11px] text-stone-500 leading-relaxed -mt-1">
+              Live independent context retrieved to verify situation conditions and surroundings.
+            </p>
+
+            <div className="space-y-2.5">
+              {analysisResult.externalContext.map((item) => (
+                <div
+                  key={item.id}
+                  className="p-3 rounded-xl border border-stone-200/80 bg-stone-50/50 space-y-2"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {getExternalSourceBadge(item.source)}
+                      {getExternalVerificationBadge(item.verificationStatus)}
+                    </div>
+                    <span className="text-[10px] text-stone-400 font-mono shrink-0">
+                      {new Date(item.retrievedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+
+                  <div className="space-y-0.5">
+                    <h3 className="text-xs font-semibold text-stone-900 leading-snug">
+                      {item.title}
+                    </h3>
+                    <p className="text-xs text-stone-600 leading-relaxed">
+                      {item.summary}
+                    </p>
+                  </div>
+
+                  {item.sourceReference && (
+                    <div className="pt-1 border-t border-stone-200/50 flex items-center justify-between text-[10px] text-stone-400">
+                      <span className="truncate pr-2">Ref: {item.sourceReference}</span>
+                      <ExternalLink className="w-2.5 h-2.5 shrink-0 text-stone-400" />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           </section>
         )}
 

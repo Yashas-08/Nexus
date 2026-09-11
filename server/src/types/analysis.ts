@@ -123,9 +123,23 @@ export const VerificationSummarySchema = z.object({
 });
 export type VerificationSummary = z.infer<typeof VerificationSummarySchema>;
 
+// Phase 8: Real-World Context Model
+export const ExternalContextItemSchema = z.object({
+  id: z.string(),
+  source: z.enum(['WEB', 'MAP', 'WEATHER']),
+  title: z.string().min(1),
+  summary: z.string().min(1),
+  retrievedAt: z.string(),
+  relevance: z.enum(['LOW', 'MEDIUM', 'HIGH']),
+  verificationStatus: z.enum(['VERIFIED', 'CONTEXT_ONLY', 'UNAVAILABLE']),
+  sourceReference: z.string().optional(),
+});
+export type ExternalContextItem = z.infer<typeof ExternalContextItemSchema>;
+
 export const NormalizedAnalysisSchema = AnalysisResponseSchema.extend({
   evidence: z.array(EvidenceItemSchema),
   conflicts: z.array(EvidenceConflictSchema),
   verificationSummary: VerificationSummarySchema,
+  externalContext: z.array(ExternalContextItemSchema).optional().default([]),
 });
 export type NormalizedAnalysis = z.infer<typeof NormalizedAnalysisSchema>;

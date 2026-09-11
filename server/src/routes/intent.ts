@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { IntentAnalyzeRequestSchema } from '../types/analysis.js';
 import { geminiService } from '../services/geminiService.js';
 import { verificationEngine } from '../services/verificationEngine.js';
+import { contextRouter } from '../services/context/contextRouter.js';
 
 const router = Router();
 
@@ -19,10 +20,17 @@ router.post('/analyze', async (req: Request, res: Response) => {
     // 2. Call Gemini multimodal service
     const rawAnalysis = await geminiService.analyzeIntent(validationResult.data);
 
-    // 3. Pass through deterministic Evidence & Verification Engine
-    const normalizedAnalysis = verificationEngine.normalize(rawAnalysis, validationResult.data);
+    // 3. Deterministically route and retrieve relevant real-world external context
+    const externalContext = await contextRouter.routeContext(validationResult.data, rawAnalysis);
 
-    // 4. Return validated evidence-aware result
+    // 4. Pass through deterministic Evidence & Verification Engine
+    const normalizedAnalysis = verificationEngine.normalize(
+      rawAnalysis,
+      validationResult.data,
+      externalContext
+    );
+
+    // 5. Return validated evidence-aware result with real-world context
     return res.status(200).json({
       status: 'success',
       data: normalizedAnalysis,

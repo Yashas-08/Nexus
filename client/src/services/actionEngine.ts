@@ -81,6 +81,22 @@ const ACTION_BLUEPRINTS: ActionBlueprint[] = [
     requiresApproval: false,
     matchPatterns: [/\b(collapse|collapsed|cave-in|ceiling falling|wall buckling|cracked foundation)\b/i],
   },
+  {
+    id: 'safety-severe-weather-hazard',
+    category: 'SAFETY',
+    priority: 'HIGH',
+    title: 'Avoid low-lying roadways and seek elevated shelter',
+    description: 'Meteorological telemetry or local reports indicate severe precipitation or storm conditions. Avoid driving or walking through moving water.',
+    rationale: 'External weather telemetry corroborates heightened environmental and flash flood hazards.',
+    requiresApproval: false,
+    matchPatterns: [/\b(storm|heavy rain|downpour|flash flood|severe weather)\b/i],
+    condition: (analysis) =>
+      Boolean(
+        analysis.externalContext?.some(
+          (c) => c.source === 'WEATHER' && c.relevance === 'HIGH'
+        )
+      ),
+  },
 
   // --- 2. GET HELP / CONTACT DISPATCH (Second) ---
   {

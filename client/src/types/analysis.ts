@@ -61,8 +61,20 @@ export interface AnalysisResult {
   missingInformation: string[];
 }
 
+export interface ExternalContextItem {
+  id: string;
+  source: 'WEB' | 'MAP' | 'WEATHER';
+  title: string;
+  summary: string;
+  retrievedAt: string;
+  relevance: 'LOW' | 'MEDIUM' | 'HIGH';
+  verificationStatus: 'VERIFIED' | 'CONTEXT_ONLY' | 'UNAVAILABLE';
+  sourceReference?: string;
+}
+
 export interface NormalizedAnalysis extends AnalysisResult {
   evidence: EvidenceItem[];
   conflicts: EvidenceConflict[];
   verificationSummary: VerificationSummary;
+  externalContext?: ExternalContextItem[];
 }
