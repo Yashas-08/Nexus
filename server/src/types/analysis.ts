@@ -42,7 +42,7 @@ export const IntentAnalyzeRequestSchema = z.object({
 
 export type IntentAnalyzeRequest = z.infer<typeof IntentAnalyzeRequestSchema>;
 
-// Source of Truth for Gemini Analysis Output
+// Phase 4 Source of Truth for Gemini Raw Output
 export const AnalysisResponseSchema = z.object({
   situation: z.string().min(1),
   userIntent: z.string().min(1),
@@ -76,3 +76,56 @@ export const AnalysisResponseSchema = z.object({
 });
 
 export type AnalysisResult = z.infer<typeof AnalysisResponseSchema>;
+
+// Phase 5: Normalized Evidence & Verification Model
+export const EvidenceStatusSchema = z.enum([
+  'VERIFIED',
+  'USER_REPORTED',
+  'INFERRED',
+  'UNKNOWN',
+]);
+export type EvidenceStatus = z.infer<typeof EvidenceStatusSchema>;
+
+export const EvidenceSourceSchema = z.enum([
+  'text',
+  'image',
+  'document',
+  'location',
+  'system',
+]);
+export type EvidenceSource = z.infer<typeof EvidenceSourceSchema>;
+
+export const EvidenceItemSchema = z.object({
+  id: z.string(),
+  text: z.string().min(1),
+  status: EvidenceStatusSchema,
+  source: EvidenceSourceSchema,
+  confidence: z.number().min(0).max(1).nullable().optional(),
+  verifiedBy: z.string().nullable().optional(),
+  notes: z.string().nullable().optional(),
+});
+export type EvidenceItem = z.infer<typeof EvidenceItemSchema>;
+
+export const EvidenceConflictSchema = z.object({
+  description: z.string(),
+  competingClaims: z.array(z.string()),
+  resolution: z.string(),
+});
+export type EvidenceConflict = z.infer<typeof EvidenceConflictSchema>;
+
+export const VerificationSummarySchema = z.object({
+  verifiedCount: z.number(),
+  userReportedCount: z.number(),
+  inferredCount: z.number(),
+  unknownCount: z.number(),
+  totalEvidenceCount: z.number(),
+  verificationScore: z.number(), // Ratio between 0 and 1
+});
+export type VerificationSummary = z.infer<typeof VerificationSummarySchema>;
+
+export const NormalizedAnalysisSchema = AnalysisResponseSchema.extend({
+  evidence: z.array(EvidenceItemSchema),
+  conflicts: z.array(EvidenceConflictSchema),
+  verificationSummary: VerificationSummarySchema,
+});
+export type NormalizedAnalysis = z.infer<typeof NormalizedAnalysisSchema>;

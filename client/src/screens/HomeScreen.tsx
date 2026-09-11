@@ -16,6 +16,7 @@ import {
   RefreshCw,
   RotateCcw,
   ShieldAlert,
+  ShieldCheck,
   Sparkles,
   Trash2,
   X,
@@ -27,7 +28,7 @@ import type {
   LocationContext,
   IntentPayload,
 } from '../types/intent';
-import type { AnalysisResult, SeverityLevel } from '../types/analysis';
+import type { NormalizedAnalysis, SeverityLevel } from '../types/analysis';
 import {
   validateImageFile,
   validateDocumentFile,
@@ -60,7 +61,7 @@ export function HomeScreen({
   // Interaction / Transient states
   const [isRecording, setIsRecording] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
+  const [analysisResult, setAnalysisResult] = useState<NormalizedAnalysis | null>(null);
 
   // Status and Error states
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -365,28 +366,35 @@ export function HomeScreen({
     switch (source) {
       case 'image':
         return (
-          <span className="text-[10px] font-medium px-1.5 py-0.2 rounded bg-blue-50 text-blue-700 border border-blue-100 inline-flex items-center gap-0.5">
+          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-100 inline-flex items-center gap-1">
             <Camera className="w-2.5 h-2.5" />
             Photo
           </span>
         );
       case 'document':
         return (
-          <span className="text-[10px] font-medium px-1.5 py-0.2 rounded bg-purple-50 text-purple-700 border border-purple-100 inline-flex items-center gap-0.5">
+          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-100 inline-flex items-center gap-1">
             <FileText className="w-2.5 h-2.5" />
             Doc
           </span>
         );
       case 'location':
         return (
-          <span className="text-[10px] font-medium px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 border border-emerald-100 inline-flex items-center gap-0.5">
+          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-100 inline-flex items-center gap-1">
             <MapPin className="w-2.5 h-2.5" />
             GPS
           </span>
         );
+      case 'system':
+        return (
+          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-violet-50 text-violet-700 border border-violet-100 inline-flex items-center gap-1">
+            <Sparkles className="w-2.5 h-2.5" />
+            System
+          </span>
+        );
       default:
         return (
-          <span className="text-[10px] font-medium px-1.5 py-0.2 rounded bg-stone-100 text-stone-600">
+          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-stone-100 text-stone-600 border border-stone-200">
             Text
           </span>
         );
@@ -395,13 +403,27 @@ export function HomeScreen({
 
   // --- RENDER ANALYSIS PRESENTATION (AFTER SUCCESSFUL UNDERSTANDING) ---
   if (analysisResult) {
+    const verifiedItems = analysisResult.evidence
+      ? analysisResult.evidence.filter((e) => e.status === 'VERIFIED')
+      : [];
+    const userReportedItems = analysisResult.evidence
+      ? analysisResult.evidence.filter((e) => e.status === 'USER_REPORTED')
+      : [];
+    const inferredItems = analysisResult.evidence
+      ? analysisResult.evidence.filter((e) => e.status === 'INFERRED')
+      : [];
+    const unknownItems = analysisResult.evidence
+      ? analysisResult.evidence.filter((e) => e.status === 'UNKNOWN')
+      : [];
+
     return (
-      <div className="w-full px-4 pt-6 pb-28 max-w-md mx-auto space-y-6 animate-in fade-in duration-200">
+      <div className="w-full px-4 pt-6 pb-28 max-w-md mx-auto space-y-5 animate-in fade-in duration-200">
+        {/* Header with Classification Status & Confidence */}
         <header className="space-y-1.5">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2.5 py-0.5 rounded-full inline-flex items-center gap-1">
-              <CheckCircle2 className="w-3 h-3" />
-              Structured Analysis
+              <ShieldCheck className="w-3 h-3" />
+              Verified Understanding
             </span>
             <span className="text-xs font-medium text-stone-500">
               {Math.round(analysisResult.confidence * 100)}% Confidence
@@ -411,7 +433,7 @@ export function HomeScreen({
             Situation Understood
           </h1>
           <p className="text-xs sm:text-sm text-stone-500">
-            Verified evidence, claims, and risks extracted from your context.
+            Evidence classified deterministically into verified facts, claims, inferences, and unknowns.
           </p>
         </header>
 
@@ -439,42 +461,194 @@ export function HomeScreen({
           </div>
         </section>
 
-        {/* Facts (Verified Evidence) */}
-        {analysisResult.facts.length > 0 && (
-          <section className="p-4 rounded-2xl bg-white border border-stone-200/90 shadow-xs space-y-2.5">
-            <div className="flex items-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-800">
-                Verified Facts ({analysisResult.facts.length})
+        {/* Verification Summary Audit Bar */}
+        {analysisResult.verificationSummary && (
+          <section className="p-4 rounded-2xl bg-white border border-stone-200/90 shadow-xs space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-stone-700">
+                  Verification Audit
+                </h2>
+              </div>
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-stone-100 text-stone-700 border border-stone-200">
+                {Math.round(analysisResult.verificationSummary.verificationScore * 100)}% Verified
+              </span>
+            </div>
+
+            {/* Segmented Distribution Bar */}
+            <div className="h-2 w-full rounded-full bg-stone-100 overflow-hidden flex">
+              {analysisResult.verificationSummary.totalEvidenceCount > 0 ? (
+                <>
+                  <div
+                    style={{
+                      width: `${(analysisResult.verificationSummary.verifiedCount / analysisResult.verificationSummary.totalEvidenceCount) * 100}%`,
+                    }}
+                    className="bg-emerald-500 h-full transition-all"
+                    title={`Verified: ${analysisResult.verificationSummary.verifiedCount}`}
+                  />
+                  <div
+                    style={{
+                      width: `${(analysisResult.verificationSummary.userReportedCount / analysisResult.verificationSummary.totalEvidenceCount) * 100}%`,
+                    }}
+                    className="bg-stone-400 h-full transition-all"
+                    title={`User-Reported: ${analysisResult.verificationSummary.userReportedCount}`}
+                  />
+                  <div
+                    style={{
+                      width: `${(analysisResult.verificationSummary.inferredCount / analysisResult.verificationSummary.totalEvidenceCount) * 100}%`,
+                    }}
+                    className="bg-violet-400 h-full transition-all"
+                    title={`Inferred: ${analysisResult.verificationSummary.inferredCount}`}
+                  />
+                  <div
+                    style={{
+                      width: `${(analysisResult.verificationSummary.unknownCount / analysisResult.verificationSummary.totalEvidenceCount) * 100}%`,
+                    }}
+                    className="bg-amber-300 h-full transition-all"
+                    title={`Unknown: ${analysisResult.verificationSummary.unknownCount}`}
+                  />
+                </>
+              ) : (
+                <div className="w-full bg-stone-200 h-full" />
+              )}
+            </div>
+
+            {/* Counts grid */}
+            <div className="grid grid-cols-4 gap-1.5 pt-1 text-center">
+              <div className="p-2 rounded-xl bg-emerald-50/70 border border-emerald-100">
+                <span className="block text-base font-bold text-emerald-800">
+                  {analysisResult.verificationSummary.verifiedCount}
+                </span>
+                <span className="block text-[10px] font-medium text-emerald-700 uppercase tracking-tight">
+                  Verified
+                </span>
+              </div>
+              <div className="p-2 rounded-xl bg-stone-50 border border-stone-200">
+                <span className="block text-base font-bold text-stone-800">
+                  {analysisResult.verificationSummary.userReportedCount}
+                </span>
+                <span className="block text-[10px] font-medium text-stone-600 uppercase tracking-tight">
+                  Reported
+                </span>
+              </div>
+              <div className="p-2 rounded-xl bg-violet-50/70 border border-violet-100">
+                <span className="block text-base font-bold text-violet-800">
+                  {analysisResult.verificationSummary.inferredCount}
+                </span>
+                <span className="block text-[10px] font-medium text-violet-700 uppercase tracking-tight">
+                  Inferred
+                </span>
+              </div>
+              <div className="p-2 rounded-xl bg-amber-50/70 border border-amber-100">
+                <span className="block text-base font-bold text-amber-800">
+                  {analysisResult.verificationSummary.unknownCount}
+                </span>
+                <span className="block text-[10px] font-medium text-amber-700 uppercase tracking-tight">
+                  Unknown
+                </span>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* Conflicts Banner (Discrepancies identified) */}
+        {analysisResult.conflicts && analysisResult.conflicts.length > 0 && (
+          <section className="p-4 rounded-2xl bg-amber-50/90 border border-amber-200/90 shadow-xs space-y-3">
+            <div className="flex items-center gap-2 text-amber-900">
+              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+              <h3 className="text-xs font-semibold uppercase tracking-wider">
+                Discrepancies Identified ({analysisResult.conflicts.length})
               </h3>
             </div>
+            <div className="space-y-2.5">
+              {analysisResult.conflicts.map((conflict, idx) => (
+                <div key={idx} className="p-3 rounded-xl bg-white border border-amber-200/70 text-xs space-y-1.5">
+                  <p className="font-semibold text-amber-900">{conflict.description}</p>
+                  {conflict.competingClaims.length > 0 && (
+                    <div className="space-y-0.5 text-stone-600 pl-2 border-l border-amber-300">
+                      {conflict.competingClaims.map((claim, cIdx) => (
+                        <p key={cIdx} className="text-[11px]">&bull; {claim}</p>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-[11px] text-amber-800 font-medium pt-0.5">
+                    Recommended Resolution: {conflict.resolution}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Tier 1: VERIFIED Evidence */}
+        {verifiedItems.length > 0 && (
+          <section className="p-4 rounded-2xl bg-white border border-stone-200/90 shadow-xs space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-800">
+                  Verified Evidence ({verifiedItems.length})
+                </h3>
+              </div>
+              <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                Corroborated
+              </span>
+            </div>
+            <p className="text-[11px] text-stone-500 leading-relaxed">
+              Objectively corroborated by files, telemetry sensors, or verified records.
+            </p>
             <ul className="space-y-2 text-xs text-stone-700">
-              {analysisResult.facts.map((fact, idx) => (
-                <li key={idx} className="flex items-start justify-between gap-2 pl-1 border-l-2 border-emerald-400">
-                  <span className="leading-relaxed">{fact.text}</span>
-                  <span className="shrink-0 mt-0.5">{getSourceBadge(fact.source)}</span>
+              {verifiedItems.map((item) => (
+                <li
+                  key={item.id}
+                  className="p-2.5 rounded-xl bg-emerald-50/30 border border-emerald-100/80 space-y-1"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="leading-relaxed font-medium text-stone-900">{item.text}</span>
+                    <span className="shrink-0">{getSourceBadge(item.source)}</span>
+                  </div>
+                  {item.verifiedBy && (
+                    <div className="flex items-center gap-1 text-[10px] text-emerald-700 font-medium">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                      <span>Verified via {item.verifiedBy}</span>
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>
           </section>
         )}
 
-        {/* User-Reported Information */}
-        {analysisResult.userReported.length > 0 && (
-          <section className="p-4 rounded-2xl bg-white border border-stone-200/90 shadow-xs space-y-2.5">
-            <div className="flex items-center gap-1.5">
-              <Info className="w-4 h-4 text-stone-500" />
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-800">
-                User-Reported Claims ({analysisResult.userReported.length})
-              </h3>
+        {/* Tier 2: USER_REPORTED Claims */}
+        {userReportedItems.length > 0 && (
+          <section className="p-4 rounded-2xl bg-white border border-stone-200/90 shadow-xs space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <Info className="w-4 h-4 text-stone-500" />
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-800">
+                  User-Reported Information ({userReportedItems.length})
+                </h3>
+              </div>
+              <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 border border-stone-200">
+                Unverified
+              </span>
             </div>
-            <p className="text-[11px] text-stone-400 -mt-1">
-              Information asserted directly by the user, pending independent verification.
+            <p className="text-[11px] text-stone-500 leading-relaxed">
+              Direct assertions from your situation narrative; pending independent corroboration.
             </p>
             <ul className="space-y-2 text-xs text-stone-700">
-              {analysisResult.userReported.map((item, idx) => (
-                <li key={idx} className="flex items-start justify-between gap-2 pl-1 border-l-2 border-stone-300">
-                  <span className="leading-relaxed">{item.text}</span>
+              {userReportedItems.map((item) => (
+                <li
+                  key={item.id}
+                  className="flex items-start justify-between gap-2 p-2.5 rounded-xl bg-stone-50/70 border border-stone-200/80"
+                >
+                  <div className="space-y-0.5 min-w-0">
+                    <span className="leading-relaxed text-stone-800">{item.text}</span>
+                    {item.notes && (
+                      <p className="text-[10px] text-stone-500">{item.notes}</p>
+                    )}
+                  </div>
                   <span className="shrink-0 mt-0.5">{getSourceBadge(item.source)}</span>
                 </li>
               ))}
@@ -482,21 +656,37 @@ export function HomeScreen({
           </section>
         )}
 
-        {/* Inferences */}
-        {analysisResult.inferences.length > 0 && (
-          <section className="p-4 rounded-2xl bg-white border border-stone-200/90 shadow-xs space-y-2.5">
-            <div className="flex items-center gap-1.5">
-              <Sparkles className="w-4 h-4 text-stone-600" />
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-800">
-                Logical Inferences ({analysisResult.inferences.length})
-              </h3>
+        {/* Tier 3: INFERRED Logic */}
+        {inferredItems.length > 0 && (
+          <section className="p-4 rounded-2xl bg-white border border-stone-200/90 shadow-xs space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-violet-600" />
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-800">
+                  Logical Inferences ({inferredItems.length})
+                </h3>
+              </div>
+              <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-violet-50 text-violet-700 border border-violet-200">
+                Deductions
+              </span>
             </div>
+            <p className="text-[11px] text-stone-500 leading-relaxed">
+              System inferences derived from context patterns; not established as verified facts.
+            </p>
             <ul className="space-y-2 text-xs text-stone-700">
-              {analysisResult.inferences.map((inf, idx) => (
-                <li key={idx} className="flex items-start justify-between gap-2 pl-1 border-l-2 border-stone-300">
-                  <span className="leading-relaxed">{inf.text}</span>
-                  <span className="shrink-0 text-[10px] font-mono text-stone-400">
-                    {Math.round(inf.confidence * 100)}% prob
+              {inferredItems.map((item) => (
+                <li
+                  key={item.id}
+                  className="flex items-start justify-between gap-2 p-2.5 rounded-xl bg-violet-50/30 border border-violet-100/80"
+                >
+                  <div className="space-y-0.5 min-w-0">
+                    <span className="leading-relaxed text-stone-800">{item.text}</span>
+                    {item.notes && (
+                      <p className="text-[10px] text-stone-500">{item.notes}</p>
+                    )}
+                  </div>
+                  <span className="shrink-0 text-[10px] font-mono px-2 py-0.5 rounded bg-white text-violet-700 border border-violet-200 font-medium">
+                    {Math.round((item.confidence ?? 0.7) * 100)}% prob
                   </span>
                 </li>
               ))}
@@ -504,8 +694,36 @@ export function HomeScreen({
           </section>
         )}
 
-        {/* Identified Risks */}
-        {analysisResult.risks.length > 0 && (
+        {/* Tier 4: UNKNOWN Missing Information */}
+        {unknownItems.length > 0 && (
+          <section className="p-4 rounded-2xl bg-stone-50/90 border border-stone-200/90 shadow-2xs space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <HelpCircle className="w-4 h-4 text-stone-600" />
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-800">
+                  Missing Information ({unknownItems.length})
+                </h3>
+              </div>
+              <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-stone-200/80 text-stone-700">
+                Unknown
+              </span>
+            </div>
+            <p className="text-[11px] text-stone-500 leading-relaxed">
+              Key details needed to establish full certainty and proceed with resolution.
+            </p>
+            <ul className="space-y-1.5 text-xs text-stone-700">
+              {unknownItems.map((item) => (
+                <li key={item.id} className="flex items-start gap-2 p-2 rounded-lg bg-white border border-stone-200/70">
+                  <span className="text-stone-400 font-bold">&bull;</span>
+                  <span className="leading-relaxed text-stone-800">{item.text}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {/* Potential Risks & Complications */}
+        {analysisResult.risks && analysisResult.risks.length > 0 && (
           <section className="p-4 rounded-2xl bg-white border border-stone-200/90 shadow-xs space-y-2.5">
             <div className="flex items-center gap-1.5">
               <AlertTriangle className="w-4 h-4 text-amber-600" />
@@ -526,32 +744,12 @@ export function HomeScreen({
           </section>
         )}
 
-        {/* Missing Information Checklist */}
-        {analysisResult.missingInformation.length > 0 && (
-          <section className="p-4 rounded-2xl bg-stone-50 border border-stone-200/80 shadow-2xs space-y-2">
-            <div className="flex items-center gap-1.5">
-              <HelpCircle className="w-4 h-4 text-stone-500" />
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-700">
-                Missing Information / Clarifications
-              </h3>
-            </div>
-            <ul className="space-y-1.5 text-xs text-stone-600">
-              {analysisResult.missingInformation.map((item, idx) => (
-                <li key={idx} className="flex items-start gap-1.5">
-                  <span className="text-stone-400 mt-0.5">&bull;</span>
-                  <span className="leading-relaxed">{item}</span>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
         {/* Primary Action Controls */}
         <div className="space-y-2 pt-2">
           <button
             type="button"
             onClick={onNavigateToCases}
-            className="w-full h-12 rounded-xl bg-stone-900 text-stone-50 text-sm font-medium transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+            className="w-full h-12 rounded-xl bg-stone-900 text-stone-50 text-sm font-medium transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm hover:bg-stone-800"
           >
             <span>Track in Cases</span>
             <ArrowRight className="w-4 h-4" />

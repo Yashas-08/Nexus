@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { IntentAnalyzeRequestSchema } from '../types/analysis.js';
 import { geminiService } from '../services/geminiService.js';
+import { verificationEngine } from '../services/verificationEngine.js';
 
 const router = Router();
 
@@ -16,12 +17,15 @@ router.post('/analyze', async (req: Request, res: Response) => {
     }
 
     // 2. Call Gemini multimodal service
-    const analysis = await geminiService.analyzeIntent(validationResult.data);
+    const rawAnalysis = await geminiService.analyzeIntent(validationResult.data);
 
-    // 3. Return validated structured result
+    // 3. Pass through deterministic Evidence & Verification Engine
+    const normalizedAnalysis = verificationEngine.normalize(rawAnalysis, validationResult.data);
+
+    // 4. Return validated evidence-aware result
     return res.status(200).json({
       status: 'success',
-      data: analysis,
+      data: normalizedAnalysis,
     });
   } catch (err: any) {
     console.error('[POST /api/intent/analyze] Error:', err.message);

@@ -1,5 +1,5 @@
 import type { IntentPayload } from '../types/intent';
-import type { AnalysisResult } from '../types/analysis';
+import type { NormalizedAnalysis } from '../types/analysis';
 
 export interface HealthStatus {
   status: string;
@@ -62,7 +62,7 @@ export async function fileToText(file: File): Promise<string | undefined> {
 /**
  * Sends structured intent draft to the backend Gemini service for multimodal analysis.
  */
-export async function analyzeIntent(payload: IntentPayload): Promise<AnalysisResult> {
+export async function analyzeIntent(payload: IntentPayload): Promise<NormalizedAnalysis> {
   // 1. Process images into base64 payloads
   const images = await Promise.all(
     payload.images.map(async (img) => ({
@@ -127,5 +127,5 @@ export async function analyzeIntent(payload: IntentPayload): Promise<AnalysisRes
     throw new Error('Received unexpected or malformed response from analysis service.');
   }
 
-  return responseJson.data as AnalysisResult;
+  return responseJson.data as NormalizedAnalysis;
 }
