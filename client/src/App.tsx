@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import type { CaseItem, NavTab } from './types/cases';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { AppHeader } from './components/AppHeader';
 import { BottomNav } from './components/BottomNav';
 import { HomeScreen } from './screens/HomeScreen';
 import { CasesScreen } from './screens/CasesScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
 import { AuthScreen } from './screens/AuthScreen';
+import { RefreshCw } from 'lucide-react';
 
 const INITIAL_CASES: CaseItem[] = [
   {
@@ -58,34 +60,55 @@ const INITIAL_CASES: CaseItem[] = [
   },
 ];
 
-export default function App() {
-  // Authentication boundary state
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
-  const [userEmail, setUserEmail] = useState<string>('alex.morgan@nexus.user');
+function NexusApp() {
+  const { user, isLoading, isRecoveryMode, signOut } = useAuth();
 
   // Navigation state
   const [activeTab, setActiveTab] = useState<NavTab>('home');
   const [cases] = useState<CaseItem[]>(INITIAL_CASES);
 
-  // Authentication handlers
-  const handleAuthenticate = (identifier?: string) => {
-    if (identifier) {
-      setUserEmail(identifier.includes('@') ? identifier : `${identifier}@mobile.user`);
-    }
-    setIsAuthenticated(true);
-  };
+  // Optional local demo access state for prototyping & evaluation
+  const [isDemoUser, setIsDemoUser] = useState<boolean>(false);
 
-  const handleSignOut = () => {
-    setIsAuthenticated(false);
+  // Handle Sign Out from either demo mode or Supabase session
+  const handleSignOut = async () => {
+    setIsDemoUser(false);
+    await signOut();
     setActiveTab('home');
   };
 
-  // If unauthenticated, show AuthScreen boundary
-  if (!isAuthenticated) {
-    return <AuthScreen onAuthenticate={handleAuthenticate} />;
+  // 1. Initial Session Restoration Loading State
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-stone-50 flex flex-col items-center justify-center p-6 antialiased">
+        <div className="w-14 h-14 rounded-2xl bg-stone-900 text-stone-50 flex items-center justify-center shadow-md">
+          <span className="text-2xl font-bold tracking-tighter">N</span>
+        </div>
+        <div className="mt-5 flex items-center gap-2 text-xs text-stone-500 font-medium">
+          <RefreshCw className="w-3.5 h-3.5 animate-spin text-stone-600" />
+          <span>Restoring session...</span>
+        </div>
+      </div>
+    );
   }
 
-  // Count cases needing approval for badge
+  // 2. Password Recovery View (triggered by reset-password email link)
+  if (isRecoveryMode) {
+    return <AuthScreen initialView="reset-password" />;
+  }
+
+  // 3. Unauthenticated State
+  const isAuthenticated = Boolean(user || isDemoUser);
+  if (!isAuthenticated) {
+    return (
+      <AuthScreen
+        initialView="login"
+        onDemoAccess={() => setIsDemoUser(true)}
+      />
+    );
+  }
+
+  // 4. Authenticated Application Shell
   const pendingActionCount = cases.filter((c) => c.status === 'needs_approval').length;
 
   return (
@@ -111,7 +134,7 @@ export default function App() {
             <CasesScreen
               cases={cases}
               onSelectCase={() => {
-                // In Phase 1 foundation, selecting case can remain visual or open details
+                // Future phase will bind to case details
               }}
             />
           )}
@@ -119,8 +142,11 @@ export default function App() {
           {activeTab === 'profile' && (
             <ProfileScreen
               onSignOut={handleSignOut}
-              userEmail={userEmail}
-              userName="Alex Morgan"
+              userEmail={user?.email || (isDemoUser ? 'demo.user@nexus.app' : undefined)}
+              userName={
+                (user?.user_metadata?.full_name as string) ||
+                (isDemoUser ? 'Demo User' : undefined)
+              }
             />
           )}
         </main>
@@ -133,5 +159,13 @@ export default function App() {
         />
       </div>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <NexusApp />
+    </AuthProvider>
   );
 }

@@ -1,20 +1,45 @@
 import { useState } from 'react';
 import { Bell, ChevronRight, Lock, LogOut, Shield, Smartphone } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 interface ProfileScreenProps {
-  onSignOut: () => void;
+  onSignOut?: () => void;
   userEmail?: string;
   userName?: string;
 }
 
 export function ProfileScreen({
   onSignOut,
-  userEmail = 'alex.morgan@nexus.user',
-  userName = 'Alex Morgan',
+  userEmail: propEmail,
+  userName: propName,
 }: ProfileScreenProps) {
+  const { user, signOut } = useAuth();
+
   const [urgentAlerts, setUrgentAlerts] = useState(true);
   const [resolutionUpdates, setResolutionUpdates] = useState(true);
   const [locationContext, setLocationContext] = useState(true);
+
+  // Derive user info from Supabase session or props
+  const userEmail = propEmail || user?.email || 'alex.morgan@nexus.user';
+  const userName =
+    propName ||
+    (user?.user_metadata?.full_name as string) ||
+    (user?.email ? user.email.split('@')[0].replace('.', ' ') : 'Alex Morgan');
+
+  const handleSignOut = async () => {
+    if (onSignOut) {
+      onSignOut();
+    } else {
+      await signOut();
+    }
+  };
+
+  const initials = userName
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
 
   return (
     <div className="w-full px-4 pt-6 pb-28 max-w-md mx-auto space-y-6 animate-in fade-in duration-200">
@@ -31,15 +56,11 @@ export function ProfileScreen({
       {/* Account Identity Card */}
       <section className="p-4 rounded-2xl bg-white border border-stone-200/90 shadow-xs flex items-center gap-3.5">
         <div className="w-12 h-12 rounded-full bg-stone-900 text-stone-100 font-semibold flex items-center justify-center text-base tracking-tight shrink-0">
-          {userName
-            .split(' ')
-            .map((n) => n[0])
-            .join('')
-            .slice(0, 2)}
+          {initials || 'NX'}
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <h2 className="text-sm font-semibold text-stone-900 truncate">
+            <h2 className="text-sm font-semibold text-stone-900 truncate capitalize">
               {userName}
             </h2>
             <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-stone-100 text-stone-700">
@@ -147,7 +168,7 @@ export function ProfileScreen({
       <section className="space-y-3 pt-2">
         <button
           type="button"
-          onClick={onSignOut}
+          onClick={handleSignOut}
           className="w-full py-3 px-4 rounded-xl border border-stone-200 bg-white hover:bg-stone-50 text-stone-700 text-sm font-medium flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-2xs"
         >
           <LogOut className="w-4 h-4 text-stone-500" />
