@@ -1,0 +1,12 @@
+warning: in the working copy of 'client/src/App.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'client/src/screens/AuthScreen.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'client/src/services/caseService.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/index.ts', LF will be replaced by CRLF the next time Git touches it
+ client/src/App.tsx                 | 26 [32m++++++[m[31m--------------------[m
+ client/src/components/.gitkeep     |  1 [31m-[m
+ client/src/screens/.gitkeep        |  1 [31m-[m
+ client/src/screens/AuthScreen.tsx  | 16 [32m+[m[31m---------------[m
+ client/src/services/caseService.ts |  4 [32m++[m[31m--[m
+ server/src/index.ts                | 10 [32m++++++[m[31m----[m
+ server/src/services/.gitkeep       |  1 [31m-[m
+ 7 files changed, 15 insertions(+), 44 deletions(-)

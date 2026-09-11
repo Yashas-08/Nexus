@@ -8,7 +8,6 @@ import {
   EyeOff,
   Mail,
   RefreshCw,
-  Shield,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -16,10 +15,9 @@ type AuthView = 'login' | 'register' | 'forgot-password' | 'reset-password' | 'e
 
 interface AuthScreenProps {
   initialView?: AuthView;
-  onDemoAccess?: () => void;
 }
 
-export function AuthScreen({ initialView = 'login', onDemoAccess }: AuthScreenProps) {
+export function AuthScreen({ initialView = 'login' }: AuthScreenProps) {
   const {
     signInWithEmail,
     signUpWithEmail,
@@ -428,18 +426,6 @@ export function AuthScreen({ initialView = 'login', onDemoAccess }: AuthScreenPr
               </svg>
               <span>Continue with Google</span>
             </button>
-
-            {/* Optional Demo Account Bypass for testing */}
-            {onDemoAccess && (
-              <button
-                type="button"
-                onClick={onDemoAccess}
-                className="w-full h-11 rounded-xl border border-dashed border-stone-300 hover:border-stone-400 bg-stone-100/40 text-stone-600 font-medium text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <Shield className="w-3.5 h-3.5 text-stone-500" />
-                <span>Explore with Demo Account</span>
-              </button>
-            )}
 
             {/* Switch to Register */}
             <div className="pt-2 text-center">

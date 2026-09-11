@@ -21,9 +21,6 @@ function NexusApp() {
   const [isLoadingCases, setIsLoadingCases] = useState(false);
   const [casesError, setCasesError] = useState<string | null>(null);
 
-  // Optional local demo access state for prototyping & evaluation
-  const [isDemoUser, setIsDemoUser] = useState<boolean>(false);
-
   // Load cases for current authenticated user
   const loadCases = useCallback(async () => {
     setIsLoadingCases(true);
@@ -40,10 +37,10 @@ function NexusApp() {
   }, []);
 
   useEffect(() => {
-    if (user || isDemoUser) {
+    if (user) {
       loadCases();
     }
-  }, [user, isDemoUser, loadCases]);
+  }, [user, loadCases]);
 
   const handleSelectCase = (record: CaseRecord) => {
     setActiveCase(record);
@@ -71,9 +68,7 @@ function NexusApp() {
     setActiveCase(savedRecord);
   };
 
-  // Handle Sign Out from either demo mode or Supabase session
   const handleSignOut = async () => {
-    setIsDemoUser(false);
     await signOut();
     setActiveTab('home');
   };
@@ -99,14 +94,8 @@ function NexusApp() {
   }
 
   // 3. Unauthenticated State
-  const isAuthenticated = Boolean(user || isDemoUser);
-  if (!isAuthenticated) {
-    return (
-      <AuthScreen
-        initialView="login"
-        onDemoAccess={() => setIsDemoUser(true)}
-      />
-    );
+  if (!user) {
+    return <AuthScreen initialView="login" />;
   }
 
   // 4. Authenticated Application Shell
@@ -150,11 +139,8 @@ function NexusApp() {
           {activeTab === 'profile' && (
             <ProfileScreen
               onSignOut={handleSignOut}
-              userEmail={user?.email || (isDemoUser ? 'demo.user@nexus.app' : undefined)}
-              userName={
-                (user?.user_metadata?.full_name as string) ||
-                (isDemoUser ? 'Demo User' : undefined)
-              }
+              userEmail={user.email}
+              userName={user.user_metadata?.full_name as string}
             />
           )}
         </main>

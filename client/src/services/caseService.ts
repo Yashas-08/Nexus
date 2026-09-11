@@ -149,11 +149,11 @@ export class CaseService {
         }
       }
 
-      // 2. Offline / Demo Mode fallback (Single source in localStorage when unauthenticated)
+      // 2. Local session store fallback (when offline or unauthenticated)
       const now = new Date().toISOString();
       const localRecord: CaseRecord = {
         id: caseId || `case-local-${Date.now()}`,
-        userId: 'demo-user',
+        userId: user?.id || 'unauthenticated-user',
         title,
         situation,
         intent,

@@ -28,9 +28,11 @@ app.use('/api/intent', intentRouter);
 app.use(notFoundHandler);
 app.use(errorHandler);
 
-// Start server
-app.listen(port, () => {
-  console.log(`[nexus-server] Server listening on port ${port}`);
-});
+// Start server locally when not running as a Vercel serverless function
+if (!process.env.VERCEL) {
+  app.listen(port, () => {
+    console.log(`[nexus-server] Server listening on port ${port}`);
+  });
+}
 
 export default app;
