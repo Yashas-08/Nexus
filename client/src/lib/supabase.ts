@@ -9,6 +9,13 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
+export const isSupabaseConfigured = Boolean(
+  supabaseUrl &&
+  supabaseAnonKey &&
+  !supabaseUrl.includes('placeholder') &&
+  !supabaseAnonKey.includes('placeholder')
+);
+
 // Dedicated Supabase client for Authentication and PostgreSQL queries
 export const supabase = createClient(
   supabaseUrl || 'https://placeholder.supabase.co',

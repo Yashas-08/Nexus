@@ -66,6 +66,25 @@ export function AuthScreen({ initialView = 'login' }: AuthScreenProps) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim());
   };
 
+  const formatAuthErrorMessage = (error: Error | string | null): string => {
+    if (!error) return 'An unexpected error occurred. Please try again.';
+    const message = typeof error === 'string' ? error : error.message || '';
+    const lower = message.toLowerCase();
+    if (lower.includes('invalid login credentials')) {
+      return 'Invalid email or password. Please verify and try again.';
+    }
+    if (lower.includes('email not confirmed')) {
+      return 'Please verify your email address before signing in. Check your inbox for the confirmation email.';
+    }
+    if (lower.includes('user already registered')) {
+      return 'An account with this email already exists. Try signing in instead.';
+    }
+    if (lower.includes('failed to fetch') || lower.includes('networkerror')) {
+      return 'Unable to reach the authentication service. If you recently updated .env, please restart your Vite dev server (Ctrl+C then npm run dev) and check your internet connection.';
+    }
+    return message;
+  };
+
   // Handle Login
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -92,14 +111,7 @@ export function AuthScreen({ initialView = 'login' }: AuthScreenProps) {
     setIsLoading(false);
 
     if (error) {
-      // Map Supabase error message to calm user message
-      if (error.message.toLowerCase().includes('invalid login credentials')) {
-        setFormError('Invalid email or password. Please verify and try again.');
-      } else if (error.message.toLowerCase().includes('email not confirmed')) {
-        setFormError('Please verify your email address before signing in.');
-      } else {
-        setFormError(error.message);
-      }
+      setFormError(formatAuthErrorMessage(error));
     }
   };
 
@@ -140,7 +152,7 @@ export function AuthScreen({ initialView = 'login' }: AuthScreenProps) {
     setIsLoading(false);
 
     if (error) {
-      setFormError(error.message);
+      setFormError(formatAuthErrorMessage(error));
     } else if (requiresEmailConfirmation) {
       setEmailConfirmationAddress(email.trim());
       setView('email-sent');
@@ -166,7 +178,7 @@ export function AuthScreen({ initialView = 'login' }: AuthScreenProps) {
     setIsLoading(false);
 
     if (error) {
-      setFormError(error.message);
+      setFormError(formatAuthErrorMessage(error));
     } else {
       setFormSuccess(`Password reset link sent to ${email.trim()}. Please check your inbox.`);
     }
@@ -198,7 +210,7 @@ export function AuthScreen({ initialView = 'login' }: AuthScreenProps) {
     setIsLoading(false);
 
     if (error) {
-      setFormError(error.message);
+      setFormError(formatAuthErrorMessage(error));
     } else {
       setFormSuccess('Password successfully updated. You may now continue.');
       setTimeout(() => {
@@ -223,7 +235,7 @@ export function AuthScreen({ initialView = 'login' }: AuthScreenProps) {
           'Google authentication is not yet enabled on your Supabase project. Enable Google under Authentication > Providers in your Supabase dashboard.'
         );
       } else {
-        setFormError(error.message);
+        setFormError(formatAuthErrorMessage(error));
       }
     }
   };

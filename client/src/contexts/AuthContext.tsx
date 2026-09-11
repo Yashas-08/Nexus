@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useMemo } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
-import { supabase } from '../lib/supabase';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 interface AuthContextType {
   user: User | null;
@@ -32,6 +32,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Check if initial URL contains a recovery hash (from email reset link)
     if (window.location.hash.includes('type=recovery') || window.location.hash.includes('reset-password')) {
       setIsRecoveryMode(true);
+    }
+
+    // If supabase is not configured, avoid restoring session to prevent network errors
+    if (!isSupabaseConfigured) {
+      setIsLoading(false);
+      return;
     }
 
     // 1. Restore initial session on application mount
@@ -74,6 +80,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const signInWithEmail = async (email: string, password: string) => {
+    if (!isSupabaseConfigured) {
+      return {
+        error: new Error(
+          'Supabase credentials are not detected. Please restart your Vite dev server (Ctrl+C then npm run dev).'
+        ),
+      };
+    }
     try {
       const { error } = await supabase.auth.signInWithPassword({
         email: email.trim(),
@@ -86,6 +99,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signUpWithEmail = async (email: string, password: string, fullName: string) => {
+    if (!isSupabaseConfigured) {
+      return {
+        error: new Error(
+          'Supabase credentials are not detected. Please restart your Vite dev server (Ctrl+C then npm run dev).'
+        ),
+        user: null,
+        requiresEmailConfirmation: false,
+      };
+    }
     try {
       const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
