@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import type { CaseItem, NavTab } from './types/cases';
+import { useState, useEffect, useCallback } from 'react';
+import type { CaseRecord, NavTab } from './types/cases';
+import { mapCaseRecordToCaseItem } from './types/cases';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { AppHeader } from './components/AppHeader';
 import { BottomNav } from './components/BottomNav';
@@ -7,68 +8,68 @@ import { HomeScreen } from './screens/HomeScreen';
 import { CasesScreen } from './screens/CasesScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
 import { AuthScreen } from './screens/AuthScreen';
+import { caseService } from './services/caseService';
 import { RefreshCw } from 'lucide-react';
-
-const INITIAL_CASES: CaseItem[] = [
-  {
-    id: 'case-1',
-    title: 'Street flooding & drainage backup near residence',
-    situationType: 'Infrastructure & Safety',
-    priority: 'high',
-    status: 'needs_approval',
-    summary:
-      'Storm drain blockage causing street-level water accumulation near 14th Ave. Municipal dispatch notified.',
-    updatedAt: '2h ago',
-    contextSources: ['location', 'photo', 'text'],
-    locationHint: '14th Ave & Oak St',
-    actionRequired: 'Review municipal hazard filing & authorize dispatch inquiry',
-  },
-  {
-    id: 'case-2',
-    title: 'Unsafe crosswalk signal timing on Elm Street',
-    situationType: 'Community & Road Safety',
-    priority: 'medium',
-    status: 'in_progress',
-    summary:
-      'Pedestrian crossing interval insufficient for senior transit access. Ticket #4921 logged with Dept of Transportation.',
-    updatedAt: 'Yesterday',
-    contextSources: ['photo', 'location'],
-    locationHint: 'Elm St crosswalk',
-  },
-  {
-    id: 'case-3',
-    title: 'Prescription formulary claim clarification',
-    situationType: 'Medical & Healthcare Admin',
-    priority: 'low',
-    status: 'verified',
-    summary:
-      'Pharmacy benefit denial reconciled against formulary tier exceptions. Co-pay reimbursement documented.',
-    updatedAt: '3 days ago',
-    contextSources: ['document'],
-  },
-  {
-    id: 'case-4',
-    title: 'Connecting flight cancellation & accommodation compensation',
-    situationType: 'Travel Disruption',
-    priority: 'high',
-    status: 'needs_approval',
-    summary:
-      'Overnight delay in Chicago. Airline issued partial food voucher but did not provide mandatory hotel accommodation receipt.',
-    updatedAt: 'Oct 12',
-    contextSources: ['document', 'text'],
-    actionRequired: 'Authorize automatic claim submission to aviation regulator',
-  },
-];
 
 function NexusApp() {
   const { user, isLoading, isRecoveryMode, signOut } = useAuth();
 
   // Navigation state
   const [activeTab, setActiveTab] = useState<NavTab>('home');
-  const [cases] = useState<CaseItem[]>(INITIAL_CASES);
+  const [savedCases, setSavedCases] = useState<CaseRecord[]>([]);
+  const [activeCase, setActiveCase] = useState<CaseRecord | null>(null);
+  const [isLoadingCases, setIsLoadingCases] = useState(false);
+  const [casesError, setCasesError] = useState<string | null>(null);
 
   // Optional local demo access state for prototyping & evaluation
   const [isDemoUser, setIsDemoUser] = useState<boolean>(false);
+
+  // Load cases for current authenticated user
+  const loadCases = useCallback(async () => {
+    setIsLoadingCases(true);
+    setCasesError(null);
+    try {
+      const records = await caseService.fetchUserCases();
+      setSavedCases(records);
+    } catch (err: any) {
+      console.error('[App] Failed to load cases:', err);
+      setCasesError('Unable to load situations. Please refresh.');
+    } finally {
+      setIsLoadingCases(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (user || isDemoUser) {
+      loadCases();
+    }
+  }, [user, isDemoUser, loadCases]);
+
+  const handleSelectCase = (record: CaseRecord) => {
+    setActiveCase(record);
+    setActiveTab('home');
+  };
+
+  const handleDeleteCase = async (caseId: string) => {
+    await caseService.deleteCase(caseId);
+    setSavedCases((prev) => prev.filter((c) => c.id !== caseId));
+    if (activeCase?.id === caseId) {
+      setActiveCase(null);
+    }
+  };
+
+  const handleCaseSaved = (savedRecord: CaseRecord) => {
+    setSavedCases((prev) => {
+      const existingIdx = prev.findIndex((c) => c.id === savedRecord.id);
+      if (existingIdx >= 0) {
+        const next = [...prev];
+        next[existingIdx] = savedRecord;
+        return next;
+      }
+      return [savedRecord, ...prev];
+    });
+    setActiveCase(savedRecord);
+  };
 
   // Handle Sign Out from either demo mode or Supabase session
   const handleSignOut = async () => {
@@ -109,7 +110,8 @@ function NexusApp() {
   }
 
   // 4. Authenticated Application Shell
-  const pendingActionCount = cases.filter((c) => c.status === 'needs_approval').length;
+  const caseItems = savedCases.map(mapCaseRecordToCaseItem);
+  const pendingActionCount = caseItems.filter((c) => c.status === 'needs_approval').length;
 
   return (
     <div className="min-h-screen bg-stone-100 flex justify-center antialiased">
@@ -126,16 +128,22 @@ function NexusApp() {
           {activeTab === 'home' && (
             <HomeScreen
               onNavigateToCases={() => setActiveTab('cases')}
-              recentCases={cases}
+              recentCases={caseItems}
+              activeCase={activeCase}
+              onClearActiveCase={() => setActiveCase(null)}
+              onCaseSaved={handleCaseSaved}
             />
           )}
 
           {activeTab === 'cases' && (
             <CasesScreen
-              cases={cases}
-              onSelectCase={() => {
-                // Future phase will bind to case details
-              }}
+              cases={caseItems}
+              isLoading={isLoadingCases}
+              error={casesError}
+              onRefresh={loadCases}
+              onSelectCase={handleSelectCase}
+              onDeleteCase={handleDeleteCase}
+              onNavigateHome={() => setActiveTab('home')}
             />
           )}
 

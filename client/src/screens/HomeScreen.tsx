@@ -2,7 +2,10 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   AlertCircle,
   AlertTriangle,
+  ArrowLeft,
   ArrowRight,
+  Bookmark,
+  BookmarkCheck,
   Camera,
   CheckCircle2,
   CloudRain,
@@ -24,7 +27,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import type { CaseItem } from '../types/cases';
+import type { CaseItem, CaseRecord } from '../types/cases';
 import type {
   ImageAttachment,
   DocumentAttachment,
@@ -36,6 +39,7 @@ import type { RiskLevel, UrgencyLevel } from '../types/risk';
 import type { ActionCategory, ActionPriority, ActionStatus } from '../types/actions';
 import { assessRisk } from '../services/riskEngine';
 import { generateActionGraph } from '../services/actionEngine';
+import { caseService } from '../services/caseService';
 import {
   validateImageFile,
   validateDocumentFile,
@@ -52,11 +56,17 @@ const MAX_TEXT_LENGTH = 2500;
 interface HomeScreenProps {
   onNavigateToCases: () => void;
   recentCases: CaseItem[];
+  activeCase?: CaseRecord | null;
+  onClearActiveCase?: () => void;
+  onCaseSaved?: (savedCase: CaseRecord) => void;
 }
 
 export function HomeScreen({
   onNavigateToCases,
   recentCases,
+  activeCase,
+  onClearActiveCase,
+  onCaseSaved,
 }: HomeScreenProps) {
   // Main Draft State
   const [situationText, setSituationText] = useState('');
@@ -70,6 +80,28 @@ export function HomeScreen({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<NormalizedAnalysis | null>(null);
   const [actionOverrides, setActionOverrides] = useState<Record<string, ActionStatus>>({});
+
+  // Persistence state
+  const [savedCaseId, setSavedCaseId] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  // Synchronize when an active saved case is passed in (e.g. reopened from Cases screen)
+  useEffect(() => {
+    if (activeCase) {
+      setAnalysisResult(activeCase.analysis);
+      setSituationText(activeCase.situation);
+      setSavedCaseId(activeCase.id);
+      setSaveSuccess(true);
+      // Populate action overrides from saved actions
+      const overrides: Record<string, ActionStatus> = {};
+      activeCase.actions.forEach((a) => {
+        overrides[a.id] = a.status;
+      });
+      setActionOverrides(overrides);
+    }
+  }, [activeCase]);
 
   // Status and Error states
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -317,9 +349,47 @@ export function HomeScreen({
     }
   };
 
+  const handleSaveSituation = async () => {
+    if (!analysisResult || isSaving) return;
+    setIsSaving(true);
+    setSaveError(null);
+
+    try {
+      const risk = assessRisk(analysisResult);
+      const rawActionGraph = generateActionGraph(analysisResult, risk);
+      const currentActions = rawActionGraph.actions.map((act) => ({
+        ...act,
+        status: actionOverrides[act.id] || act.status,
+      }));
+
+      const savedCase = await caseService.saveCase({
+        caseId: savedCaseId || undefined,
+        situation: analysisResult.situation,
+        intent: analysisResult.userIntent,
+        riskAssessment: risk,
+        analysis: analysisResult,
+        externalContext: analysisResult.externalContext,
+        actions: currentActions,
+      });
+
+      setSavedCaseId(savedCase.id);
+      setSaveSuccess(true);
+      onCaseSaved?.(savedCase);
+    } catch (err: any) {
+      console.error('[handleSaveSituation] Save error:', err);
+      setSaveError(err?.message || 'Failed to save situation. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleStartFresh = () => {
     setAnalysisResult(null);
     setActionOverrides({});
+    setSavedCaseId(null);
+    setSaveSuccess(false);
+    setSaveError(null);
+    onClearActiveCase?.();
     setSituationText('');
     setImages([]);
     setDocuments([]);
@@ -336,6 +406,10 @@ export function HomeScreen({
     // Returns to composer while keeping all draft fields intact
     setAnalysisResult(null);
     setActionOverrides({});
+    setSavedCaseId(null);
+    setSaveSuccess(false);
+    setSaveError(null);
+    onClearActiveCase?.();
     setSubmitError(null);
   };
 
@@ -643,6 +717,26 @@ export function HomeScreen({
 
     return (
       <div className="w-full px-4 pt-6 pb-28 max-w-md mx-auto space-y-5 animate-in fade-in duration-200">
+        {/* Reopened from Saved Case Header Bar */}
+        {activeCase && (
+          <div className="flex items-center justify-between pb-1 border-b border-stone-200">
+            <button
+              type="button"
+              onClick={() => {
+                onClearActiveCase?.();
+                onNavigateToCases();
+              }}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-stone-600 hover:text-stone-900 transition-colors cursor-pointer"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Back to Cases</span>
+            </button>
+            <span className="text-[11px] font-medium text-stone-400">
+              Saved Case
+            </span>
+          </div>
+        )}
+
         {/* Header with Classification Status & Confidence */}
         <header className="space-y-1.5">
           <div className="flex items-center justify-between">
@@ -655,10 +749,12 @@ export function HomeScreen({
             </span>
           </div>
           <h1 className="text-2xl font-semibold tracking-tight text-stone-900">
-            Situation Understood
+            {activeCase ? activeCase.title : 'Situation Understood'}
           </h1>
           <p className="text-xs sm:text-sm text-stone-500">
-            Evidence classified deterministically into verified facts, claims, inferences, and unknowns.
+            {activeCase
+              ? `Saved ${new Date(activeCase.createdAt).toLocaleDateString()} — Historical snapshot`
+              : 'Evidence classified deterministically into verified facts, claims, inferences, and unknowns.'}
           </p>
         </header>
 
@@ -1280,13 +1376,59 @@ export function HomeScreen({
 
         {/* Primary Action Controls */}
         <div className="space-y-2 pt-2">
+          {/* Save Status / Error Notification */}
+          {saveError && (
+            <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 flex-1">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>{saveError}</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleSaveSituation}
+                className="text-xs font-semibold text-rose-900 underline hover:no-underline shrink-0"
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
+          {/* Main Save / Update Button */}
+          <button
+            type="button"
+            onClick={handleSaveSituation}
+            disabled={isSaving}
+            className={`w-full h-12 rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm ${
+              saveSuccess
+                ? 'bg-emerald-800 text-white hover:bg-emerald-700'
+                : 'bg-stone-900 text-stone-50 hover:bg-stone-800'
+            } disabled:opacity-60 disabled:cursor-not-allowed`}
+          >
+            {isSaving ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                <span>Saving situation...</span>
+              </>
+            ) : saveSuccess ? (
+              <>
+                <BookmarkCheck className="w-4 h-4 text-emerald-300" />
+                <span>Saved to Cases</span>
+              </>
+            ) : (
+              <>
+                <Bookmark className="w-4 h-4" />
+                <span>{savedCaseId ? 'Update saved case' : 'Save situation'}</span>
+              </>
+            )}
+          </button>
+
           <button
             type="button"
             onClick={onNavigateToCases}
-            className="w-full h-12 rounded-xl bg-stone-900 text-stone-50 text-sm font-medium transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm hover:bg-stone-800"
+            className="w-full h-11 rounded-xl border border-stone-200 bg-white hover:bg-stone-50 text-stone-700 text-xs font-medium transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
           >
-            <span>Track in Cases</span>
-            <ArrowRight className="w-4 h-4" />
+            <span>View all cases</span>
+            <ArrowRight className="w-3.5 h-3.5 text-stone-400" />
           </button>
 
           <div className="grid grid-cols-2 gap-2">
