@@ -30,7 +30,9 @@ import type {
 } from '../types/intent';
 import type { NormalizedAnalysis, SeverityLevel } from '../types/analysis';
 import type { RiskLevel, UrgencyLevel } from '../types/risk';
+import type { ActionCategory, ActionPriority, ActionStatus } from '../types/actions';
 import { assessRisk } from '../services/riskEngine';
+import { generateActionGraph } from '../services/actionEngine';
 import {
   validateImageFile,
   validateDocumentFile,
@@ -64,6 +66,7 @@ export function HomeScreen({
   const [isRecording, setIsRecording] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<NormalizedAnalysis | null>(null);
+  const [actionOverrides, setActionOverrides] = useState<Record<string, ActionStatus>>({});
 
   // Status and Error states
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -313,6 +316,7 @@ export function HomeScreen({
 
   const handleStartFresh = () => {
     setAnalysisResult(null);
+    setActionOverrides({});
     setSituationText('');
     setImages([]);
     setDocuments([]);
@@ -328,7 +332,20 @@ export function HomeScreen({
   const handleEditSituation = () => {
     // Returns to composer while keeping all draft fields intact
     setAnalysisResult(null);
+    setActionOverrides({});
     setSubmitError(null);
+  };
+
+  const handleApproveAction = (id: string) => {
+    setActionOverrides((prev) => ({ ...prev, [id]: 'APPROVED' }));
+  };
+
+  const handleDismissAction = (id: string) => {
+    setActionOverrides((prev) => ({ ...prev, [id]: 'DISMISSED' }));
+  };
+
+  const handleResetAction = (id: string) => {
+    setActionOverrides((prev) => ({ ...prev, [id]: 'RECOMMENDED' }));
   };
 
   const getSeverityBadge = (severity: SeverityLevel) => {
@@ -426,6 +443,76 @@ export function HomeScreen({
     }
   };
 
+  const getActionCategoryBadge = (category: ActionCategory) => {
+    switch (category) {
+      case 'SAFETY':
+        return (
+          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 border border-rose-200 uppercase tracking-tight">
+            Safety
+          </span>
+        );
+      case 'CONTACT':
+        return (
+          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 uppercase tracking-tight">
+            Contact
+          </span>
+        );
+      case 'INFORMATION':
+        return (
+          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200 uppercase tracking-tight">
+            Information
+          </span>
+        );
+      case 'DOCUMENT':
+        return (
+          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-200 uppercase tracking-tight">
+            Document
+          </span>
+        );
+      case 'FOLLOW_UP':
+        return (
+          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-stone-100 text-stone-600 border border-stone-200 uppercase tracking-tight">
+            Follow Up
+          </span>
+        );
+      default:
+        return (
+          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-stone-100 text-stone-600 border border-stone-200 uppercase tracking-tight">
+            {category}
+          </span>
+        );
+    }
+  };
+
+  const getActionPriorityBadge = (priority: ActionPriority) => {
+    switch (priority) {
+      case 'CRITICAL':
+        return (
+          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 border border-rose-200">
+            Critical
+          </span>
+        );
+      case 'HIGH':
+        return (
+          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200">
+            High
+          </span>
+        );
+      case 'MEDIUM':
+        return (
+          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-stone-100 text-stone-700 border border-stone-200">
+            Medium
+          </span>
+        );
+      case 'LOW':
+        return (
+          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-stone-100 text-stone-500 border border-stone-200">
+            Low
+          </span>
+        );
+    }
+  };
+
   const getSourceBadge = (source: string) => {
     switch (source) {
       case 'image':
@@ -468,6 +555,14 @@ export function HomeScreen({
   // --- RENDER ANALYSIS PRESENTATION (AFTER SUCCESSFUL UNDERSTANDING) ---
   if (analysisResult) {
     const riskAssessment = assessRisk(analysisResult);
+    const rawActionGraph = generateActionGraph(analysisResult, riskAssessment);
+    const actions = rawActionGraph.actions.map((act) => ({
+      ...act,
+      status: actionOverrides[act.id] || act.status,
+    }));
+    const activeActions = actions.filter((a) => a.status !== 'DISMISSED');
+    const dismissedActions = actions.filter((a) => a.status === 'DISMISSED');
+
     const verifiedItems = analysisResult.evidence
       ? analysisResult.evidence.filter((e) => e.status === 'VERIFIED')
       : [];
@@ -635,6 +730,147 @@ export function HomeScreen({
             <p className="text-[10px] text-stone-400 pt-1 leading-normal border-t border-stone-100">
               Assessment derived deterministically from available reported context. For active life threats or hazards, contact local emergency services directly.
             </p>
+          </section>
+        )}
+
+        {/* Next Steps: Prioritized Decision Action Graph */}
+        {actions.length > 0 && (
+          <section className="p-4 rounded-2xl bg-white border border-stone-200/90 shadow-xs space-y-3.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4 text-stone-800" />
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-stone-700">
+                  Next Steps
+                </h2>
+              </div>
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-stone-100 text-stone-700 border border-stone-200">
+                {activeActions.length} Recommended Action{activeActions.length === 1 ? '' : 's'}
+              </span>
+            </div>
+
+            <p className="text-[11px] text-stone-500 leading-relaxed -mt-1">
+              Prioritized decision flow based on risk level and available evidence.
+            </p>
+
+            {/* Active Actions Flow */}
+            <div className="space-y-3">
+              {activeActions.map((action, idx) => {
+                const isPrimary = idx === 0 && action.priority !== 'LOW';
+                const isApproved = action.status === 'APPROVED';
+
+                return (
+                  <div
+                    key={action.id}
+                    className={`p-3.5 rounded-xl border transition-all space-y-2.5 ${
+                      isApproved
+                        ? 'bg-emerald-50/40 border-emerald-200/90'
+                        : isPrimary
+                        ? 'bg-stone-50/90 border-stone-300 shadow-2xs'
+                        : 'bg-white border-stone-200/90'
+                    }`}
+                  >
+                    {/* Header line: Category & Priority */}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5">
+                        {getActionCategoryBadge(action.category)}
+                        {getActionPriorityBadge(action.priority)}
+                      </div>
+                      {action.requiresApproval && !isApproved && (
+                        <span className="text-[10px] font-medium text-stone-400">
+                          Requires Approval
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Action Title & Description */}
+                    <div className="space-y-1">
+                      <h3 className="text-sm font-semibold text-stone-900 leading-snug">
+                        {action.title}
+                      </h3>
+                      <p className="text-xs text-stone-600 leading-relaxed">
+                        {action.description}
+                      </p>
+                    </div>
+
+                    {/* Rationale Disclosure */}
+                    <div className="p-2 rounded-lg bg-stone-100/70 border border-stone-200/60 text-[11px] text-stone-600 leading-normal">
+                      <span className="font-medium text-stone-700">Rationale: </span>
+                      <span>{action.rationale}</span>
+                    </div>
+
+                    {/* Interaction & Approval State */}
+                    <div className="pt-1 flex items-center justify-between gap-2 border-t border-stone-100">
+                      {isApproved ? (
+                        <div className="flex items-center justify-between w-full">
+                          <div className="flex items-center gap-1.5 text-emerald-800 text-xs font-semibold">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>Approved &mdash; Ready to proceed</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleResetAction(action.id)}
+                            className="text-[11px] text-stone-400 hover:text-stone-700 cursor-pointer underline"
+                          >
+                            Reset
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between w-full">
+                          {action.requiresApproval ? (
+                            <button
+                              type="button"
+                              onClick={() => handleApproveAction(action.id)}
+                              className="h-8 px-3 rounded-lg bg-stone-900 text-stone-50 text-xs font-medium hover:bg-stone-800 transition-colors cursor-pointer shadow-2xs flex items-center gap-1.5"
+                            >
+                              <span>Approve</span>
+                              <ArrowRight className="w-3 h-3" />
+                            </button>
+                          ) : (
+                            <span className="text-[11px] text-stone-400 italic">
+                              Precautionary guideline
+                            </span>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() => handleDismissAction(action.id)}
+                            className="h-8 px-2.5 rounded-lg text-stone-400 hover:text-stone-700 text-xs transition-colors cursor-pointer"
+                          >
+                            Dismiss
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Dismissed Actions Accordion / Recovery */}
+            {dismissedActions.length > 0 && (
+              <div className="pt-2 border-t border-stone-100 text-xs space-y-1.5">
+                <span className="text-[11px] text-stone-400 block font-medium">
+                  Dismissed Actions ({dismissedActions.length})
+                </span>
+                <div className="space-y-1">
+                  {dismissedActions.map((action) => (
+                    <div
+                      key={action.id}
+                      className="p-2 rounded-lg bg-stone-50 border border-stone-200/60 flex items-center justify-between gap-2 text-stone-500 text-xs"
+                    >
+                      <span className="line-through truncate flex-1">{action.title}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleResetAction(action.id)}
+                        className="text-[11px] font-medium text-stone-600 hover:text-stone-900 cursor-pointer shrink-0 underline"
+                      >
+                        Restore
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </section>
         )}
 

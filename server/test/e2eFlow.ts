@@ -1,4 +1,5 @@
 import { assessRisk } from '../../client/src/services/riskEngine';
+import { generateActionGraph } from '../../client/src/services/actionEngine';
 
 async function testE2E() {
   console.log('1. Testing High Risk Situation against live server...');
@@ -32,6 +33,20 @@ async function testE2E() {
     throw new Error(`Expected URGENT or IMMEDIATE urgency, got ${risk1.urgency}`);
   }
 
+  const actionGraph1 = generateActionGraph(body1.data, risk1);
+  console.log('Generated Actions Count:', actionGraph1.actions.length);
+  console.log('Action Sequence:');
+  actionGraph1.actions.forEach((a, i) => {
+    console.log(`  ${i + 1}. [${a.category}] ${a.title} (${a.priority}) - RequiresApproval: ${a.requiresApproval}`);
+  });
+
+  if (!actionGraph1.stageSummary.hasSafetyAction) {
+    throw new Error('Expected high-risk situation to have a SAFETY action');
+  }
+  if (actionGraph1.actions[0].category !== 'SAFETY') {
+    throw new Error('Expected high-risk first action to be SAFETY');
+  }
+
   console.log('\n2. Testing Low Risk Situation against live server...');
   const lowRiskPayload = {
     text: 'Want to check the community center weekend opening hours and room reservation policy.',
@@ -61,6 +76,17 @@ async function testE2E() {
   }
   if (risk2.urgency !== 'ROUTINE') {
     throw new Error(`Expected ROUTINE urgency, got ${risk2.urgency}`);
+  }
+
+  const actionGraph2 = generateActionGraph(body2.data, risk2);
+  console.log('Generated Actions Count (Low Risk):', actionGraph2.actions.length);
+  console.log('Action Sequence:');
+  actionGraph2.actions.forEach((a, i) => {
+    console.log(`  ${i + 1}. [${a.category}] ${a.title} (${a.priority}) - RequiresApproval: ${a.requiresApproval}`);
+  });
+
+  if (actionGraph2.stageSummary.hasSafetyAction) {
+    throw new Error('Low risk situation should NOT have emergency safety actions');
   }
 
   console.log('\n--- E2E FLOW TEST COMPLETED SUCCESSFULLY ---');
