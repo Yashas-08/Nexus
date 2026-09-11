@@ -18,8 +18,8 @@ CRITICAL RULES:
 2. NEVER invent, assume, or hallucinate facts or evidence not present in the inputs.
 3. If an image is provided, analyze the visual evidence carefully.
 4. If location is provided, note the geographic context accurately.
-5. Severity must be one of: "low", "medium", "high", "critical", assigned strictly based on real urgency/harm.
-6. Return a valid JSON object matching the requested schema.`;
+6. Return a valid JSON object matching the requested schema.
+7. MEDICAL SAFETY GUARD: For medical or healthcare documents/inputs, NEVER provide a diagnosis, prescribe treatments, or make clinical assertions. Frame extracted clinical notes strictly as "Information identified in document" or "Information reported by user", and recommend discussing with a qualified healthcare professional.`;
 
 export class GeminiService {
   private modelName = 'gemini-2.5-flash';

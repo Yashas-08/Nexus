@@ -206,6 +206,16 @@ const ACTION_BLUEPRINTS: ActionBlueprint[] = [
     matchPatterns: [/\b(schedule|appointment|renewal|ticket|reservation)\b/i],
     condition: (_, risk) => risk?.level === 'LOW',
   },
+  {
+    id: 'followup-medical-consultation',
+    category: 'FOLLOW_UP',
+    priority: 'MEDIUM',
+    title: 'Review medical report with a qualified healthcare professional',
+    description: 'Discuss extracted discharge notes, medication schedules, or formulary details with your attending physician or care team.',
+    rationale: 'NEXUS provides document extraction assistance only and does not provide clinical medical advice.',
+    requiresApproval: false,
+    matchPatterns: [/\b(hospital|discharge|doctor|prescription|medical|formulary|care team|consultation|patient)\b/i],
+  },
 ];
 
 const CATEGORY_ORDER: Record<ActionCategory, number> = {

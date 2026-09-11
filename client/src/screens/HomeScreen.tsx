@@ -6,6 +6,7 @@ import {
   ArrowRight,
   Bookmark,
   BookmarkCheck,
+  Building2,
   Camera,
   CheckCircle2,
   CloudRain,
@@ -24,6 +25,7 @@ import {
   ShieldAlert,
   ShieldCheck,
   Sparkles,
+  Stethoscope,
   Trash2,
   X,
 } from 'lucide-react';
@@ -1477,13 +1479,83 @@ export function HomeScreen({
       />
 
       {/* Central inquiry */}
-      <header className="space-y-1.5">
+      <header className="space-y-2">
         <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-stone-900">
           What do you need help with?
         </h1>
         <p className="text-xs sm:text-sm text-stone-500 leading-relaxed">
           Describe any situation, disruption, or document. Add photos, records, or voice notes for context.
         </p>
+
+        {/* Demo Scenario Starters */}
+        <div className="pt-1.5 space-y-1.5">
+          <span className="text-[11px] font-semibold text-stone-400 uppercase tracking-wider block">
+            Example Scenarios
+          </span>
+          <div className="grid grid-cols-3 gap-2 text-left">
+            <button
+              type="button"
+              onClick={() => {
+                setSituationText('Severe flash flood and storm drain backup on residential road near 14th Ave with water rising rapidly');
+                setLocation({
+                  latitude: 51.5074,
+                  longitude: -0.1278,
+                  accuracy: 10,
+                  timestamp: new Date().toISOString(),
+                  label: 'London (14th Ave)',
+                });
+              }}
+              className="p-2.5 rounded-xl border border-stone-200/90 bg-white hover:bg-stone-50 transition-colors shadow-2xs space-y-1 cursor-pointer group"
+            >
+              <div className="flex items-center gap-1 text-sky-700">
+                <CloudRain className="w-3.5 h-3.5" />
+                <span className="text-[11px] font-semibold">Flood / Emergency</span>
+              </div>
+              <p className="text-[10px] text-stone-500 line-clamp-2 leading-tight group-hover:text-stone-700">
+                Flash flood & storm drain overflow
+              </p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setSituationText('Deep sinkhole and cracked foundation on main boulevard creating severe traffic block');
+                setLocation({
+                  latitude: 40.7128,
+                  longitude: -74.006,
+                  accuracy: 15,
+                  timestamp: new Date().toISOString(),
+                  label: 'Civic Boulevard',
+                });
+              }}
+              className="p-2.5 rounded-xl border border-stone-200/90 bg-white hover:bg-stone-50 transition-colors shadow-2xs space-y-1 cursor-pointer group"
+            >
+              <div className="flex items-center gap-1 text-amber-700">
+                <Building2 className="w-3.5 h-3.5" />
+                <span className="text-[11px] font-semibold">Civic Issue</span>
+              </div>
+              <p className="text-[10px] text-stone-500 line-clamp-2 leading-tight group-hover:text-stone-700">
+                Road damage & infrastructure risk
+              </p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setSituationText('Hospital discharge report detailing prescription formulary exceptions, post-op care, and follow-up consultation schedule');
+              }}
+              className="p-2.5 rounded-xl border border-stone-200/90 bg-white hover:bg-stone-50 transition-colors shadow-2xs space-y-1 cursor-pointer group"
+            >
+              <div className="flex items-center gap-1 text-purple-700">
+                <Stethoscope className="w-3.5 h-3.5" />
+                <span className="text-[11px] font-semibold">Medical Doc</span>
+              </div>
+              <p className="text-[10px] text-stone-500 line-clamp-2 leading-tight group-hover:text-stone-700">
+                Discharge summary & formulary review
+              </p>
+            </button>
+          </div>
+        </div>
       </header>
 
       {/* Validation & Server Error Banners */}
