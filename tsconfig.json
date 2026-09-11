@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2022"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "typeRoots": ["./server/node_modules/@types"],
+    "paths": {
+      "express": ["./server/node_modules/@types/express/index.d.ts", "./server/node_modules/express"],
+      "cors": ["./server/node_modules/@types/cors/index.d.ts", "./server/node_modules/cors"],
+      "@vercel/node": ["./server/node_modules/@vercel/node"]
+    }
+  },
+  "include": ["api/**/*"]
+}

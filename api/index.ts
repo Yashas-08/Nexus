@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import express from 'express';
+import express, { type Request, type Response, type NextFunction } from 'express';
 import cors from 'cors';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { IntentAnalyzeRequestSchema } from '../server/src/types/analysis.js';
@@ -11,13 +11,13 @@ const app = express();
 
 app.use(
   cors({
-    origin: (origin, callback) => {
+    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
       const allowed =
         !origin ||
         origin.startsWith('http://localhost') ||
         origin.endsWith('.vercel.app') ||
-        origin === (process.env.CLIENT_URL ?? '');
-      callback(allowed ? null : new Error('Not allowed by CORS'), allowed);
+        Boolean(process.env.CLIENT_URL && origin === process.env.CLIENT_URL);
+      callback(null, allowed);
     },
     credentials: true,
   })
@@ -25,7 +25,7 @@ app.use(
 app.use(express.json({ limit: '25mb' }));
 
 // ── Health ──────────────────────────────────────────────────────────────────
-app.get('/api/health', (_req, res) => {
+app.get(['/', '/api', '/api/health', '/health'], (_req: Request, res: Response) => {
   res.status(200).json({
     status: 'ok',
     message: 'NEXUS backend is running',
@@ -35,7 +35,7 @@ app.get('/api/health', (_req, res) => {
 });
 
 // ── Intent Analyze ──────────────────────────────────────────────────────────
-app.post('/api/intent/analyze', async (req, res) => {
+app.post(['/api/intent/analyze', '/intent/analyze'], async (req: Request, res: Response) => {
   const validation = IntentAnalyzeRequestSchema.safeParse(req.body);
   if (!validation.success) {
     return res.status(400).json({
@@ -52,7 +52,7 @@ app.post('/api/intent/analyze', async (req, res) => {
   } catch (err: any) {
     console.error('[POST /api/intent/analyze]', err?.message);
 
-    const msg = err?.message ?? '';
+    const msg = String(err?.message ?? '');
     if (msg.includes('GEMINI_API_KEY'))
       return res.status(503).json({ status: 'error', message: 'Gemini service is not configured.' });
     if (msg.includes('quota') || msg.includes('rate limit'))
@@ -65,9 +65,17 @@ app.post('/api/intent/analyze', async (req, res) => {
 });
 
 // ── 404 catch-all ──────────────────────────────────────────────────────────
-app.use((req, res) => {
-  res.status(404).json({ status: 'error', message: `Not found: ${req.method} ${req.originalUrl}` });
+app.use((req: Request, res: Response) => {
+  res.status(404).json({ status: 'error', message: `Not found: ${req.method} ${req.originalUrl || req.url}` });
 });
+
+// ── Error-handling middleware ──────────────────────────────────────────────
+app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+  console.error('[Unhandled API Error]', err?.message ?? err);
+  res.status(500).json({ status: 'error', message: 'Internal server error' });
+});
+
+export { app };
 
 export default function handler(req: VercelRequest, res: VercelResponse) {
   return app(req as any, res as any);
