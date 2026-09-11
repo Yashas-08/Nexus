@@ -1,0 +1,10 @@
+{
+  "name": "nexus-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "cd client && npm install && npm run build",
+    "build:client": "cd client && npm run build",
+    "build:server": "cd server && npm run build"
+  }
+}
