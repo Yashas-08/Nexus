@@ -1,18 +1,24 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   AlertCircle,
+  AlertTriangle,
   ArrowRight,
   Camera,
   CheckCircle2,
+  FileCheck,
   FileText,
+  HelpCircle,
+  Info,
   MapPin,
   Mic,
   MicOff,
   Paperclip,
   RefreshCw,
+  RotateCcw,
+  ShieldAlert,
+  Sparkles,
   Trash2,
   X,
-  FileCheck,
 } from 'lucide-react';
 import type { CaseItem } from '../types/cases';
 import type {
@@ -21,6 +27,7 @@ import type {
   LocationContext,
   IntentPayload,
 } from '../types/intent';
+import type { AnalysisResult, SeverityLevel } from '../types/analysis';
 import {
   validateImageFile,
   validateDocumentFile,
@@ -30,19 +37,18 @@ import {
   isSpeechRecognitionSupported,
   SpeechTranscriber,
 } from '../utils/speechRecognition';
+import { analyzeIntent } from '../services/api';
 
 const MAX_TEXT_LENGTH = 2500;
 
 interface HomeScreenProps {
   onNavigateToCases: () => void;
   recentCases: CaseItem[];
-  onIntentCaptured?: (payload: IntentPayload) => void;
 }
 
 export function HomeScreen({
   onNavigateToCases,
   recentCases,
-  onIntentCaptured,
 }: HomeScreenProps) {
   // Main Draft State
   const [situationText, setSituationText] = useState('');
@@ -54,13 +60,14 @@ export function HomeScreen({
   // Interaction / Transient states
   const [isRecording, setIsRecording] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [capturedPayload, setCapturedPayload] = useState<IntentPayload | null>(null);
+  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
 
   // Status and Error states
   const [validationError, setValidationError] = useState<string | null>(null);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [voiceNotice, setVoiceNotice] = useState<string | null>(null);
   const [locationNotice, setLocationNotice] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [isLocating, setIsLocating] = useState(false);
 
   // Hidden File Inputs Refs
@@ -91,12 +98,14 @@ export function HomeScreen({
     if (val.length <= MAX_TEXT_LENGTH) {
       setSituationText(val);
       if (validationError) setValidationError(null);
+      if (submitError) setSubmitError(null);
     }
   };
 
   // --- IMAGE ATTACHMENT HANDLERS ---
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     setAttachmentError(null);
+    setSubmitError(null);
     if (!e.target.files || e.target.files.length === 0) return;
 
     const file = e.target.files[0];
@@ -133,6 +142,7 @@ export function HomeScreen({
   // --- DOCUMENT ATTACHMENT HANDLERS ---
   const handleDocumentSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     setAttachmentError(null);
+    setSubmitError(null);
     if (!e.target.files || e.target.files.length === 0) return;
 
     const file = e.target.files[0];
@@ -166,6 +176,7 @@ export function HomeScreen({
   // --- LOCATION CONTEXT HANDLER ---
   const handleToggleLocation = () => {
     setLocationNotice(null);
+    setSubmitError(null);
 
     // If already attached, remove it
     if (location) {
@@ -209,6 +220,7 @@ export function HomeScreen({
   // --- VOICE-TO-TEXT HANDLER ---
   const handleToggleVoice = () => {
     setVoiceNotice(null);
+    setSubmitError(null);
 
     if (!isSpeechRecognitionSupported()) {
       setVoiceNotice('Voice recognition is not supported in this browser environment.');
@@ -253,10 +265,11 @@ export function HomeScreen({
     }
   };
 
-  // --- UNDERSTAND SUBMISSION ---
-  const handleUnderstand = (e: React.FormEvent) => {
+  // --- UNDERSTAND SUBMISSION (CALLS GEMINI BACKEND) ---
+  const handleUnderstand = async (e: React.FormEvent) => {
     e.preventDefault();
     setValidationError(null);
+    setSubmitError(null);
 
     if (!hasContent) {
       setValidationError('Please describe your situation or attach relevant context.');
@@ -271,7 +284,7 @@ export function HomeScreen({
 
     setIsSubmitting(true);
 
-    // Build structured internal intent payload
+    // Construct client intent payload
     const payload: IntentPayload = {
       id: `intent-${Date.now()}`,
       text: situationText.trim(),
@@ -282,18 +295,21 @@ export function HomeScreen({
       createdAt: new Date().toISOString(),
     };
 
-    // Simulate clean state transition boundary (prepared for Phase 4 Gemini intelligence)
-    setTimeout(() => {
+    try {
+      const result = await analyzeIntent(payload);
+      setAnalysisResult(result);
+    } catch (err: any) {
+      console.error('[Understand] Analysis error:', err);
+      setSubmitError(
+        err?.message || 'Failed to analyze situation. Please check your connection and try again.'
+      );
+    } finally {
       setIsSubmitting(false);
-      setCapturedPayload(payload);
-      if (onIntentCaptured) {
-        onIntentCaptured(payload);
-      }
-    }, 600);
+    }
   };
 
-  const handleResetIntent = () => {
-    setCapturedPayload(null);
+  const handleStartFresh = () => {
+    setAnalysisResult(null);
     setSituationText('');
     setImages([]);
     setDocuments([]);
@@ -303,99 +319,269 @@ export function HomeScreen({
     setAttachmentError(null);
     setVoiceNotice(null);
     setLocationNotice(null);
+    setSubmitError(null);
   };
 
-  // If intent was understood and is in analysis boundary:
-  if (capturedPayload) {
+  const handleEditSituation = () => {
+    // Returns to composer while keeping all draft fields intact
+    setAnalysisResult(null);
+    setSubmitError(null);
+  };
+
+  const getSeverityBadge = (severity: SeverityLevel) => {
+    switch (severity) {
+      case 'critical':
+        return (
+          <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-800 border border-rose-200 inline-flex items-center gap-1">
+            <ShieldAlert className="w-3 h-3" />
+            Critical Severity
+          </span>
+        );
+      case 'high':
+        return (
+          <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200 inline-flex items-center gap-1">
+            <AlertTriangle className="w-3 h-3" />
+            High Severity
+          </span>
+        );
+      case 'medium':
+        return (
+          <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-stone-100 text-stone-700 border border-stone-200 inline-flex items-center gap-1">
+            <Info className="w-3 h-3" />
+            Medium Severity
+          </span>
+        );
+      case 'low':
+        return (
+          <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-stone-100 text-stone-600 border border-stone-200 inline-flex items-center gap-1">
+            <CheckCircle2 className="w-3 h-3" />
+            Low Severity
+          </span>
+        );
+    }
+  };
+
+  const getSourceBadge = (source: string) => {
+    switch (source) {
+      case 'image':
+        return (
+          <span className="text-[10px] font-medium px-1.5 py-0.2 rounded bg-blue-50 text-blue-700 border border-blue-100 inline-flex items-center gap-0.5">
+            <Camera className="w-2.5 h-2.5" />
+            Photo
+          </span>
+        );
+      case 'document':
+        return (
+          <span className="text-[10px] font-medium px-1.5 py-0.2 rounded bg-purple-50 text-purple-700 border border-purple-100 inline-flex items-center gap-0.5">
+            <FileText className="w-2.5 h-2.5" />
+            Doc
+          </span>
+        );
+      case 'location':
+        return (
+          <span className="text-[10px] font-medium px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 border border-emerald-100 inline-flex items-center gap-0.5">
+            <MapPin className="w-2.5 h-2.5" />
+            GPS
+          </span>
+        );
+      default:
+        return (
+          <span className="text-[10px] font-medium px-1.5 py-0.2 rounded bg-stone-100 text-stone-600">
+            Text
+          </span>
+        );
+    }
+  };
+
+  // --- RENDER ANALYSIS PRESENTATION (AFTER SUCCESSFUL UNDERSTANDING) ---
+  if (analysisResult) {
     return (
       <div className="w-full px-4 pt-6 pb-28 max-w-md mx-auto space-y-6 animate-in fade-in duration-200">
-        <header className="space-y-1">
-          <span className="text-[11px] font-semibold tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2.5 py-0.5 rounded-full inline-flex items-center gap-1">
-            <CheckCircle2 className="w-3 h-3" />
-            Intent Captured
-          </span>
-          <h1 className="text-2xl font-semibold tracking-tight text-stone-900 pt-1">
-            Situation Structured
+        <header className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2.5 py-0.5 rounded-full inline-flex items-center gap-1">
+              <CheckCircle2 className="w-3 h-3" />
+              Structured Analysis
+            </span>
+            <span className="text-xs font-medium text-stone-500">
+              {Math.round(analysisResult.confidence * 100)}% Confidence
+            </span>
+          </div>
+          <h1 className="text-2xl font-semibold tracking-tight text-stone-900">
+            Situation Understood
           </h1>
           <p className="text-xs sm:text-sm text-stone-500">
-            NEXUS has received and structured your context. Ready for analysis.
+            Verified evidence, claims, and risks extracted from your context.
           </p>
         </header>
 
-        {/* Structured Context Summary Card */}
-        <div className="p-4 rounded-2xl bg-white border border-stone-200/90 shadow-xs space-y-4">
-          <div className="space-y-1.5">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-stone-500">
-              Described Situation
-            </h2>
-            <p className="text-sm text-stone-900 leading-relaxed bg-stone-50 p-3 rounded-xl border border-stone-100">
-              {capturedPayload.text || '(No text description provided — attachments only)'}
+        {/* Situation Overview Card */}
+        <section className="p-4 rounded-2xl bg-white border border-stone-200/90 shadow-xs space-y-3">
+          <div className="flex items-start justify-between gap-2">
+            <div className="space-y-1 flex-1">
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-stone-400">
+                Identified Situation
+              </h2>
+              <p className="text-base font-semibold text-stone-900 leading-snug">
+                {analysisResult.situation}
+              </p>
+            </div>
+            <div className="shrink-0">{getSeverityBadge(analysisResult.severity)}</div>
+          </div>
+
+          <div className="pt-2 border-t border-stone-100 space-y-1">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-400">
+              User Intent
+            </h3>
+            <p className="text-xs sm:text-sm text-stone-700 leading-relaxed">
+              {analysisResult.userIntent}
             </p>
           </div>
+        </section>
 
-          {/* Context attachments summary */}
-          <div className="pt-2 border-t border-stone-100 space-y-2">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-500">
-              Verified Context Elements
-            </h3>
-            <div className="flex flex-wrap gap-1.5 text-xs">
-              {capturedPayload.images.length > 0 && (
-                <span className="px-2.5 py-1 rounded-lg bg-stone-100 text-stone-700 font-medium inline-flex items-center gap-1.5">
-                  <Camera className="w-3.5 h-3.5 text-stone-600" />
-                  <span>{capturedPayload.images.length} photo(s) attached</span>
-                </span>
-              )}
-              {capturedPayload.documents.length > 0 && (
-                <span className="px-2.5 py-1 rounded-lg bg-stone-100 text-stone-700 font-medium inline-flex items-center gap-1.5">
-                  <FileText className="w-3.5 h-3.5 text-stone-600" />
-                  <span>{capturedPayload.documents.length} document(s) attached</span>
-                </span>
-              )}
-              {capturedPayload.location && (
-                <span className="px-2.5 py-1 rounded-lg bg-stone-100 text-stone-700 font-medium inline-flex items-center gap-1.5">
-                  <MapPin className="w-3.5 h-3.5 text-stone-600" />
-                  <span>{capturedPayload.location.label || 'Location attached'}</span>
-                </span>
-              )}
-              {capturedPayload.hasVoiceTranscribed && (
-                <span className="px-2.5 py-1 rounded-lg bg-stone-100 text-stone-700 font-medium inline-flex items-center gap-1.5">
-                  <Mic className="w-3.5 h-3.5 text-stone-600" />
-                  <span>Voice transcribed</span>
-                </span>
-              )}
+        {/* Facts (Verified Evidence) */}
+        {analysisResult.facts.length > 0 && (
+          <section className="p-4 rounded-2xl bg-white border border-stone-200/90 shadow-xs space-y-2.5">
+            <div className="flex items-center gap-1.5">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-800">
+                Verified Facts ({analysisResult.facts.length})
+              </h3>
             </div>
-          </div>
+            <ul className="space-y-2 text-xs text-stone-700">
+              {analysisResult.facts.map((fact, idx) => (
+                <li key={idx} className="flex items-start justify-between gap-2 pl-1 border-l-2 border-emerald-400">
+                  <span className="leading-relaxed">{fact.text}</span>
+                  <span className="shrink-0 mt-0.5">{getSourceBadge(fact.source)}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
-          {/* Next phase notice */}
-          <div className="p-3 rounded-xl bg-stone-100 text-stone-600 text-xs flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-stone-500" />
-            <span>Payload packaged. Awaiting Phase 4 Gemini intelligence pipeline.</span>
-          </div>
-        </div>
+        {/* User-Reported Information */}
+        {analysisResult.userReported.length > 0 && (
+          <section className="p-4 rounded-2xl bg-white border border-stone-200/90 shadow-xs space-y-2.5">
+            <div className="flex items-center gap-1.5">
+              <Info className="w-4 h-4 text-stone-500" />
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-800">
+                User-Reported Claims ({analysisResult.userReported.length})
+              </h3>
+            </div>
+            <p className="text-[11px] text-stone-400 -mt-1">
+              Information asserted directly by the user, pending independent verification.
+            </p>
+            <ul className="space-y-2 text-xs text-stone-700">
+              {analysisResult.userReported.map((item, idx) => (
+                <li key={idx} className="flex items-start justify-between gap-2 pl-1 border-l-2 border-stone-300">
+                  <span className="leading-relaxed">{item.text}</span>
+                  <span className="shrink-0 mt-0.5">{getSourceBadge(item.source)}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
-        {/* Action Controls */}
-        <div className="space-y-2">
-          <button
-            type="button"
-            onClick={handleResetIntent}
-            className="w-full h-12 rounded-xl border border-stone-200 bg-white hover:bg-stone-50 text-stone-700 text-sm font-medium transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-2xs"
-          >
-            <Trash2 className="w-4 h-4 text-stone-500" />
-            <span>Submit Another Situation</span>
-          </button>
+        {/* Inferences */}
+        {analysisResult.inferences.length > 0 && (
+          <section className="p-4 rounded-2xl bg-white border border-stone-200/90 shadow-xs space-y-2.5">
+            <div className="flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4 text-stone-600" />
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-800">
+                Logical Inferences ({analysisResult.inferences.length})
+              </h3>
+            </div>
+            <ul className="space-y-2 text-xs text-stone-700">
+              {analysisResult.inferences.map((inf, idx) => (
+                <li key={idx} className="flex items-start justify-between gap-2 pl-1 border-l-2 border-stone-300">
+                  <span className="leading-relaxed">{inf.text}</span>
+                  <span className="shrink-0 text-[10px] font-mono text-stone-400">
+                    {Math.round(inf.confidence * 100)}% prob
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {/* Identified Risks */}
+        {analysisResult.risks.length > 0 && (
+          <section className="p-4 rounded-2xl bg-white border border-stone-200/90 shadow-xs space-y-2.5">
+            <div className="flex items-center gap-1.5">
+              <AlertTriangle className="w-4 h-4 text-amber-600" />
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-800">
+                Potential Risks & Complications ({analysisResult.risks.length})
+              </h3>
+            </div>
+            <ul className="space-y-2 text-xs text-stone-700">
+              {analysisResult.risks.map((risk, idx) => (
+                <li key={idx} className="flex items-start justify-between gap-2 pl-1 border-l-2 border-amber-400">
+                  <span className="leading-relaxed">{risk.text}</span>
+                  <span className="shrink-0 capitalize font-medium text-[10px] text-amber-700">
+                    {risk.priority} priority
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {/* Missing Information Checklist */}
+        {analysisResult.missingInformation.length > 0 && (
+          <section className="p-4 rounded-2xl bg-stone-50 border border-stone-200/80 shadow-2xs space-y-2">
+            <div className="flex items-center gap-1.5">
+              <HelpCircle className="w-4 h-4 text-stone-500" />
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-700">
+                Missing Information / Clarifications
+              </h3>
+            </div>
+            <ul className="space-y-1.5 text-xs text-stone-600">
+              {analysisResult.missingInformation.map((item, idx) => (
+                <li key={idx} className="flex items-start gap-1.5">
+                  <span className="text-stone-400 mt-0.5">&bull;</span>
+                  <span className="leading-relaxed">{item}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {/* Primary Action Controls */}
+        <div className="space-y-2 pt-2">
           <button
             type="button"
             onClick={onNavigateToCases}
             className="w-full h-12 rounded-xl bg-stone-900 text-stone-50 text-sm font-medium transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm"
           >
-            <span>View Active Cases</span>
+            <span>Track in Cases</span>
             <ArrowRight className="w-4 h-4" />
           </button>
+
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={handleEditSituation}
+              className="h-11 rounded-xl border border-stone-200 bg-white hover:bg-stone-50 text-stone-700 text-xs font-medium transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-stone-500" />
+              <span>Edit Situation</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleStartFresh}
+              className="h-11 rounded-xl border border-stone-200 bg-white hover:bg-stone-50 text-stone-700 text-xs font-medium transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-stone-500" />
+              <span>Start New</span>
+            </button>
+          </div>
         </div>
       </div>
     );
   }
 
+  // --- RENDER INTENT COMPOSER ---
   return (
     <div className="w-full px-4 pt-6 pb-28 max-w-md mx-auto space-y-6 animate-in fade-in duration-200">
       {/* Hidden File Pickers */}
@@ -426,11 +612,28 @@ export function HomeScreen({
         </p>
       </header>
 
-      {/* Error & Non-blocking Notice Banners */}
+      {/* Validation & Server Error Banners */}
       {validationError && (
-        <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2 animate-in fade-in duration-150">
+        <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2 animate-in fade-in duration-150">
           <AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-rose-600" />
           <span className="flex-1">{validationError}</span>
+        </div>
+      )}
+
+      {submitError && (
+        <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2 animate-in fade-in duration-150">
+          <AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-rose-600" />
+          <div className="flex-1 space-y-1">
+            <p className="font-semibold text-rose-900">Analysis Error</p>
+            <p className="leading-relaxed text-rose-700">{submitError}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSubmitError(null)}
+            className="text-rose-500 hover:text-rose-800"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
         </div>
       )}
 
@@ -691,7 +894,7 @@ export function HomeScreen({
             {isSubmitting ? (
               <>
                 <RefreshCw className="w-4 h-4 animate-spin" />
-                <span>Structuring situation...</span>
+                <span>Analyzing with Gemini...</span>
               </>
             ) : (
               <>

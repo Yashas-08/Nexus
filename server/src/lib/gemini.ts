@@ -1,14 +1,15 @@
 import { GoogleGenAI } from '@google/genai';
 
-const apiKey = process.env.GEMINI_API_KEY;
+let cachedClient: GoogleGenAI | null = null;
 
-// Base server configuration prepared for future Gemini integrations.
-// Never expose this client or GEMINI_API_KEY to frontend/client.
-export const geminiClient = apiKey ? new GoogleGenAI({ apiKey }) : null;
-
+// Server-side Gemini client factory. Never expose this client or GEMINI_API_KEY to frontend.
 export function getGeminiClient(): GoogleGenAI {
-  if (!geminiClient) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
     throw new Error('GEMINI_API_KEY is not configured on the server.');
   }
-  return geminiClient;
+  if (!cachedClient) {
+    cachedClient = new GoogleGenAI({ apiKey });
+  }
+  return cachedClient;
 }

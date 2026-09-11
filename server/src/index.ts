@@ -4,6 +4,7 @@ dotenv.config();
 import express, { Express } from 'express';
 import cors from 'cors';
 import healthRouter from './routes/health.js';
+import intentRouter from './routes/intent.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 
 const app: Express = express();
@@ -17,10 +18,11 @@ app.use(
     credentials: true,
   })
 );
-app.use(express.json());
+app.use(express.json({ limit: '25mb' }));
 
 // Routes
 app.use('/api', healthRouter);
+app.use('/api/intent', intentRouter);
 
 // Error Handling
 app.use(notFoundHandler);
