@@ -20,25 +20,22 @@ export class ContextRouter {
     request: IntentAnalyzeRequest,
     rawAnalysis: AnalysisResult
   ): Promise<ExternalContextItem[]> {
+    const loc = request.location;
     const hasValidLocation =
-      request.location !== null &&
-      request.location !== undefined &&
-      typeof request.location.latitude === 'number' &&
-      typeof request.location.longitude === 'number' &&
-      !isNaN(request.location.latitude) &&
-      !isNaN(request.location.longitude) &&
-      request.location.latitude >= -90 &&
-      request.location.latitude <= 90 &&
-      request.location.longitude >= -180 &&
-      request.location.longitude <= 180;
+      loc != null &&
+      typeof loc.latitude === 'number' &&
+      typeof loc.longitude === 'number' &&
+      !isNaN(loc.latitude) && !isNaN(loc.longitude) &&
+      loc.latitude >= -90 && loc.latitude <= 90 &&
+      loc.longitude >= -180 && loc.longitude <= 180;
 
     const situationCorpus = [
       request.text,
       rawAnalysis.situation,
       rawAnalysis.userIntent,
-      ...(rawAnalysis.risks || []).map((r) => r.text),
-      ...(rawAnalysis.facts || []).map((f) => f.text),
-      ...(rawAnalysis.userReported || []).map((u) => u.text),
+      ...(rawAnalysis.risks ?? []).map((r) => r.text),
+      ...(rawAnalysis.facts ?? []).map((f) => f.text),
+      ...(rawAnalysis.userReported ?? []).map((u) => u.text),
     ].join(' ');
 
     const needsWeather = hasValidLocation && WEATHER_KEYWORDS.test(situationCorpus);

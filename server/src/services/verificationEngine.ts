@@ -245,13 +245,15 @@ export class VerificationEngine {
       }
     }
 
-    // 7. Compute Verification Summary Metrics
-    const verifiedCount = evidenceItems.filter((e) => e.status === 'VERIFIED').length;
-    const userReportedCount = evidenceItems.filter((e) => e.status === 'USER_REPORTED').length;
-    const inferredCount = evidenceItems.filter((e) => e.status === 'INFERRED').length;
-    const unknownCount = evidenceItems.filter((e) => e.status === 'UNKNOWN').length;
+    // 7. Compute Verification Summary Metrics (single pass)
+    let verifiedCount = 0, userReportedCount = 0, inferredCount = 0, unknownCount = 0;
+    for (const e of evidenceItems) {
+      if (e.status === 'VERIFIED') verifiedCount++;
+      else if (e.status === 'USER_REPORTED') userReportedCount++;
+      else if (e.status === 'INFERRED') inferredCount++;
+      else unknownCount++;
+    }
     const totalEvidenceCount = evidenceItems.length;
-
     const verificationScore =
       totalEvidenceCount > 0 ? Number((verifiedCount / totalEvidenceCount).toFixed(2)) : 0;
 

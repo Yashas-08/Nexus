@@ -17,10 +17,9 @@ export interface SaveCaseParams {
   customTitle?: string;
 }
 
-// In-memory duplicate save prevention lock
+// In-memory duplicate save prevention
 const pendingSavePromises = new Map<string, Promise<CaseRecord>>();
 
-// Local session store for offline/demo evaluation
 const LOCAL_STORAGE_KEY = 'nexus_saved_cases_v1';
 
 function getLocalCases(): CaseRecord[] {
@@ -36,18 +35,15 @@ function getLocalCases(): CaseRecord[] {
   }
 }
 
-function saveLocalCase(caseRecord: CaseRecord): void {
+function saveLocalCase(record: CaseRecord): void {
   try {
     const cases = getLocalCases();
-    const existingIdx = cases.findIndex((c) => c.id === caseRecord.id);
-    if (existingIdx >= 0) {
-      cases[existingIdx] = caseRecord;
-    } else {
-      cases.unshift(caseRecord);
-    }
+    const idx = cases.findIndex((c) => c.id === record.id);
+    if (idx >= 0) cases[idx] = record;
+    else cases.unshift(record);
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(cases));
   } catch (err) {
-    console.warn('[caseService] Failed to persist to localStorage:', err);
+    console.warn('[caseService] localStorage write failed:', err);
   }
 }
 
@@ -56,15 +52,21 @@ function deleteLocalCase(caseId: string): void {
     const cases = getLocalCases().filter((c) => c.id !== caseId);
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(cases));
   } catch (err) {
-    console.warn('[caseService] Failed to delete from localStorage:', err);
+    console.warn('[caseService] localStorage delete failed:', err);
   }
+}
+
+/** Shared helper — always resolves the current Supabase user. */
+async function getCurrentUser() {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.user ?? null;
 }
 
 export class CaseService {
   /**
    * Saves or updates a situation case.
-   * If caseId is provided, updates the existing row; otherwise creates a new row.
-   * Includes duplicate save protection to prevent rapid double-click duplication.
+   * Authenticated users persist to Supabase; unauthenticated fall back to localStorage.
+   * Concurrent duplicate calls for the same key return the same in-flight promise.
    */
   public async saveCase(params: SaveCaseParams): Promise<CaseRecord> {
     const {
@@ -78,82 +80,52 @@ export class CaseService {
       customTitle,
     } = params;
 
-    // Generate duplicate key
-    const dedupeKey = caseId || `${situation.slice(0, 30)}_${riskAssessment.score}`;
-    if (pendingSavePromises.has(dedupeKey)) {
-      return pendingSavePromises.get(dedupeKey)!;
-    }
+    const dedupeKey = caseId ?? `${situation.slice(0, 30)}_${riskAssessment.score}`;
+    const existing = pendingSavePromises.get(dedupeKey);
+    if (existing) return existing;
 
-    const savePromise = (async () => {
-      // 1. Get current authenticated user
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+    const savePromise = (async (): Promise<CaseRecord> => {
+      const user = await getCurrentUser();
+      const title = customTitle ?? generateCaseTitle(situation, analysis.facts);
 
-      const user = session?.user;
-      const title = customTitle || generateCaseTitle(situation, analysis.facts);
+      if (user) {
+        const commonPayload = {
+          title,
+          situation,
+          intent,
+          risk_level: riskAssessment.level,
+          urgency: riskAssessment.urgency,
+          analysis,
+          external_context: externalContext,
+          actions,
+        };
 
-      // If user is authenticated on Supabase
-      if (user && user.id) {
-        if (caseId) {
-          // UPDATE existing case
-          const { data, error } = await supabase
-            .from('cases')
-            .update({
-              title,
-              situation,
-              intent,
-              risk_level: riskAssessment.level,
-              urgency: riskAssessment.urgency,
-              analysis,
-              external_context: externalContext,
-              actions,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', caseId)
-            .select()
-            .single();
+        const query = caseId
+          ? supabase
+              .from('cases')
+              .update({ ...commonPayload, updated_at: new Date().toISOString() })
+              .eq('id', caseId)
+              .select()
+              .single()
+          : supabase
+              .from('cases')
+              .insert({ user_id: user.id, ...commonPayload })
+              .select()
+              .single();
 
-          if (error) {
-            throw new Error(`Failed to update situation case: ${error.message}`);
-          }
+        const { data, error } = await query;
+        if (error) throw new Error(`Failed to save situation: ${error.message}`);
 
-          const updatedCase = mapDatabaseRowToCase(data);
-          saveLocalCase(updatedCase);
-          return updatedCase;
-        } else {
-          // INSERT new case
-          const { data, error } = await supabase
-            .from('cases')
-            .insert({
-              user_id: user.id,
-              title,
-              situation,
-              intent,
-              risk_level: riskAssessment.level,
-              urgency: riskAssessment.urgency,
-              analysis,
-              external_context: externalContext,
-              actions,
-            })
-            .select()
-            .single();
-
-          if (error) {
-            throw new Error(`Failed to save situation case: ${error.message}`);
-          }
-
-          const savedCase = mapDatabaseRowToCase(data);
-          saveLocalCase(savedCase);
-          return savedCase;
-        }
+        const saved = mapDatabaseRowToCase(data);
+        saveLocalCase(saved);
+        return saved;
       }
 
-      // 2. Local session store fallback (when offline or unauthenticated)
+      // Unauthenticated: local-only fallback
       const now = new Date().toISOString();
-      const localRecord: CaseRecord = {
-        id: caseId || `case-local-${Date.now()}`,
-        userId: user?.id || 'unauthenticated-user',
+      const local: CaseRecord = {
+        id: caseId ?? `case-local-${Date.now()}`,
+        userId: 'unauthenticated-user',
         title,
         situation,
         intent,
@@ -165,13 +137,11 @@ export class CaseService {
         createdAt: now,
         updatedAt: now,
       };
-
-      saveLocalCase(localRecord);
-      return localRecord;
+      saveLocalCase(local);
+      return local;
     })();
 
     pendingSavePromises.set(dedupeKey, savePromise);
-
     try {
       return await savePromise;
     } finally {
@@ -179,18 +149,11 @@ export class CaseService {
     }
   }
 
-  /**
-   * Fetches all cases belonging to the authenticated user, sorted newest first.
-   */
+  /** Fetches all cases for the authenticated user, newest first. */
   public async fetchUserCases(): Promise<CaseRecord[]> {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
+    const user = await getCurrentUser();
 
-    const user = session?.user;
-
-    // If authenticated, fetch from Supabase
-    if (user && user.id) {
+    if (user) {
       try {
         const { data, error } = await supabase
           .from('cases')
@@ -198,46 +161,33 @@ export class CaseService {
           .order('created_at', { ascending: false });
 
         if (error) {
-          console.warn('[caseService] Supabase fetch error, falling back to local storage:', error.message);
+          console.warn('[caseService] Supabase fetch failed, using local cache:', error.message);
           return getLocalCases();
         }
 
-        if (data && Array.isArray(data)) {
-          const remoteCases = data
+        if (Array.isArray(data)) {
+          const records = data
             .map(mapDatabaseRowToCase)
             .map(validateAndSanitizeCase)
             .filter(Boolean) as CaseRecord[];
-
-          // Sync local copy
-          remoteCases.forEach(saveLocalCase);
-          return remoteCases;
+          records.forEach(saveLocalCase);
+          return records;
         }
       } catch (err) {
-        console.warn('[caseService] Network exception fetching cases:', err);
+        console.warn('[caseService] Network error fetching cases:', err);
       }
     }
 
-    // Return local cases
     return getLocalCases();
   }
 
-  /**
-   * Deletes a case by ID.
-   */
+  /** Deletes a case by ID from Supabase and local cache. */
   public async deleteCase(caseId: string): Promise<void> {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    const user = session?.user;
-
-    if (user && user.id) {
+    const user = await getCurrentUser();
+    if (user) {
       const { error } = await supabase.from('cases').delete().eq('id', caseId);
-      if (error) {
-        throw new Error(`Failed to delete case: ${error.message}`);
-      }
+      if (error) throw new Error(`Failed to delete case: ${error.message}`);
     }
-
     deleteLocalCase(caseId);
   }
 }
