@@ -52,6 +52,7 @@ import {
   SpeechTranscriber,
 } from '../utils/speechRecognition';
 import { analyzeIntent } from '../services/api';
+import { EvidenceChain } from '../components/EvidenceChain';
 
 const MAX_TEXT_LENGTH = 2500;
 
@@ -783,6 +784,23 @@ export function HomeScreen({
             </p>
           </div>
         </section>
+
+        {/* Evidence Chain Visualization */}
+        <EvidenceChain
+          input={{
+            text: activeCase ? activeCase.situation : situationText,
+            imageCount: activeCase
+              ? (activeCase.analysis?.evidence?.filter((e) => e.source === 'image').length ?? 0)
+              : images.length,
+            documentCount: activeCase
+              ? (activeCase.analysis?.evidence?.filter((e) => e.source === 'document').length ?? 0)
+              : documents.length,
+            location: location,
+          }}
+          analysis={analysisResult}
+          riskAssessment={riskAssessment}
+          actions={actions}
+        />
 
         {/* Risk & Priority Assessment Card */}
         {riskAssessment && (
